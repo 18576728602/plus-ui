@@ -1,14 +1,14 @@
 // 全局SCSS变量
 :root {
-  --menuBg: #1f2d3d;
-  --menuColor: #bfcbd9;
-  --menuActiveText: #f4f4f5;
-  --menuHover: #263445;
+  --menuBg: #ffffff;
+  --menuColor: rgba(0, 0, 0, 0.72);
+  --menuActiveText: #409eff;
+  --menuHover: #f2f3f5;
 
-  --subMenuBg: #1f2d3d;
-  --subMenuActiveText: #f4f4f5;
-  --subMenuHover: #001528;
-  --subMenuTitleHover: #293444;
+  --subMenuBg: #ffffff;
+  --subMenuActiveText: #409eff;
+  --subMenuHover: #f2f3f5;
+  --subMenuTitleHover: #eceef0;
 
   // 菜单栏缩进
   --el-menu-base-level-padding: 12px;
@@ -327,7 +327,7 @@ $base-menu-color: var(--menuColor);
 $base-menu-hover: var(--menuHover);
 $base-menu-color-active: var(--menuActiveText);
 $base-menu-background: var(--menuBg);
-$base-logo-title-color: #ffffff;
+$base-logo-title-color: #1f2d3d;
 
 $base-menu-light-color: rgba(0, 0, 0, 0.7);
 $base-menu-light-background: #ffffff;

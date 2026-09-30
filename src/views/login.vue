@@ -1,79 +1,100 @@
 <template>
   <div class="login">
-    <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="login-form">
-      <div class="title-box">
-        <h3 class="title">{{ title }}</h3>
-        <lang-select />
-      </div>
-      <el-form-item v-if="tenantEnabled" prop="tenantId">
-        <el-select v-model="loginForm.tenantId" filterable :placeholder="proxy.$t('login.selectPlaceholder')" style="width: 100%">
-          <el-option v-for="item in tenantList" :key="item.tenantId" :label="item.companyName" :value="item.tenantId"></el-option>
-          <template #prefix><svg-icon icon-class="company" class="el-input__icon input-icon" /></template>
-        </el-select>
-      </el-form-item>
-      <el-form-item prop="username">
-        <el-input v-model="loginForm.username" type="text" size="large" auto-complete="off" :placeholder="proxy.$t('login.username')">
-          <template #prefix><svg-icon icon-class="user" class="el-input__icon input-icon" /></template>
-        </el-input>
-      </el-form-item>
-      <el-form-item prop="password">
-        <el-input
-          v-model="loginForm.password"
-          type="password"
-          size="large"
-          auto-complete="off"
-          :placeholder="proxy.$t('login.password')"
-          @keyup.enter="handleLogin"
-        >
-          <template #prefix><svg-icon icon-class="password" class="el-input__icon input-icon" /></template>
-        </el-input>
-      </el-form-item>
-      <el-form-item v-if="captchaEnabled" prop="code">
-        <el-input
-          v-model="loginForm.code"
-          size="large"
-          auto-complete="off"
-          :placeholder="proxy.$t('login.code')"
-          style="width: 63%"
-          @keyup.enter="handleLogin"
-        >
-          <template #prefix><svg-icon icon-class="validCode" class="el-input__icon input-icon" /></template>
-        </el-input>
-        <div class="login-code">
-          <img :src="codeUrl" class="login-code-img" @click="getCode" />
+    <div class="login-shell">
+      <!-- 左侧品牌区 -->
+      <section class="login-brand">
+        <div class="brand-head">
+          <div class="brand-logo">
+            <span class="brand-badge">
+              <svg-icon icon-class="logo" />
+            </span>
+            <div class="brand-tt">
+              <strong>{{ title }}</strong>
+              <em>COMPREHENSIVE BUDGET</em>
+            </div>
+          </div>
         </div>
-      </el-form-item>
-      <el-checkbox v-model="loginForm.rememberMe" style="margin: 0 0 25px 0">{{ proxy.$t('login.rememberPassword') }}</el-checkbox>
-      <el-form-item style="float: right">
-        <el-button circle :title="proxy.$t('login.social.wechat')" @click="doSocialLogin('wechat')">
-          <svg-icon icon-class="wechat" />
-        </el-button>
-        <el-button circle :title="proxy.$t('login.social.maxkey')" @click="doSocialLogin('maxkey')">
-          <svg-icon icon-class="maxkey" />
-        </el-button>
-        <el-button circle :title="proxy.$t('login.social.topiam')" @click="doSocialLogin('topiam')">
-          <svg-icon icon-class="topiam" />
-        </el-button>
-        <el-button circle :title="proxy.$t('login.social.gitee')" @click="doSocialLogin('gitee')">
-          <svg-icon icon-class="gitee" />
-        </el-button>
-        <el-button circle :title="proxy.$t('login.social.github')" @click="doSocialLogin('github')">
-          <svg-icon icon-class="github" />
-        </el-button>
-      </el-form-item>
-      <el-form-item style="width: 100%">
-        <el-button :loading="loading" size="large" type="primary" style="width: 100%" @click.prevent="handleLogin">
-          <span v-if="!loading">{{ proxy.$t('login.login') }}</span>
-          <span v-else>{{ proxy.$t('login.logging') }}</span>
-        </el-button>
-        <div v-if="register" style="float: right">
-          <router-link class="link-type" :to="'/register'">{{ proxy.$t('login.switchRegisterPage') }}</router-link>
+
+        <div class="brand-mid">
+          <h1 class="brand-title">{{ title }}</h1>
+          <p class="brand-desc">
+            统一管控预算编制、执行、调整与合并全流程，让每一笔预算有据可查、清晰可见。
+          </p>
+          <div class="brand-highlights">
+            <span v-for="item in highlights" :key="item" class="highlight-chip">{{ item }}</span>
+          </div>
         </div>
-      </el-form-item>
-    </el-form>
+
+        <div class="brand-foot">Copyright © 全面预算管理系统 · 所有单位 All Rights Reserved.</div>
+      </section>
+
+      <!-- 右侧表单区 -->
+      <el-form ref="loginRef" :model="loginForm" :rules="loginRules" class="login-form">
+        <div class="title-box">
+          <h3 class="title">登录</h3>
+          <p class="subtitle">请输入用户名和密码登录系统</p>
+        </div>
+
+        <el-form-item v-if="tenantEnabled && showTenantSelect" prop="tenantId">
+          <el-select
+            v-model="loginForm.tenantId"
+            filterable
+            :placeholder="proxy.$t('login.selectPlaceholder')"
+            style="width: 100%"
+          >
+            <el-option v-for="item in tenantList" :key="item.tenantId" :label="item.companyName" :value="item.tenantId"></el-option>
+            <template #prefix><svg-icon icon-class="company" class="el-input__icon input-icon" /></template>
+          </el-select>
+        </el-form-item>
+
+        <el-form-item prop="username">
+          <el-input v-model="loginForm.username" type="text" size="large" auto-complete="off" :placeholder="proxy.$t('login.username')">
+            <template #prefix><svg-icon icon-class="user" class="el-input__icon input-icon" /></template>
+          </el-input>
+        </el-form-item>
+
+        <el-form-item prop="password">
+          <el-input
+            v-model="loginForm.password"
+            type="password"
+            size="large"
+            auto-complete="off"
+            :placeholder="proxy.$t('login.password')"
+            @keyup.enter="handleLogin"
+          >
+            <template #prefix><svg-icon icon-class="password" class="el-input__icon input-icon" /></template>
+          </el-input>
+        </el-form-item>
+
+        <el-form-item v-if="captchaEnabled" prop="code" class="captcha-row">
+          <el-input v-model="loginForm.code" size="large" auto-complete="off" :placeholder="proxy.$t('login.code')" @keyup.enter="handleLogin">
+            <template #prefix><svg-icon icon-class="validCode" class="el-input__icon input-icon" /></template>
+          </el-input>
+          <div class="login-code">
+            <img :src="codeUrl" class="login-code-img" alt="验证码" title="看不清？点击换一张" @click="getCode" />
+          </div>
+          <div class="login-code-tip">看不清？点击图片换一张</div>
+        </el-form-item>
+
+        <div class="form-meta">
+          <el-checkbox v-model="loginForm.rememberMe">{{ proxy.$t('login.rememberPassword') }}</el-checkbox>
+          <router-link v-if="register" class="link-type" :to="'/register'">
+            {{ proxy.$t('login.switchRegisterPage') }}
+          </router-link>
+        </div>
+
+        <el-form-item class="submit-row">
+          <el-button :loading="loading" size="large" type="primary" class="submit-button" @click.prevent="handleLogin">
+            <span v-if="!loading">{{ proxy.$t('login.login') }}</span>
+            <span v-else>{{ proxy.$t('login.logging') }}</span>
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </div>
+
     <!--  底部  -->
     <div class="el-login-footer">
-      <span>Copyright © 2018-2026 疯狂的狮子Li All Rights Reserved.</span>
+      <span>Copyright © 2018-{{ currentYear }} 全面预算管理系统 All Rights Reserved.</span>
     </div>
   </div>
 </template>
@@ -90,6 +111,8 @@ import { useI18n } from 'vue-i18n';
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 
 const title = import.meta.env.VITE_APP_TITLE;
+const currentYear = new Date().getFullYear();
+const highlights = ['预算编制', '预算执行', '预算调整', '合并报表'];
 const userStore = useUserStore();
 const router = useRouter();
 const { t } = useI18n();
@@ -116,6 +139,8 @@ const loading = ref(false);
 const captchaEnabled = ref(true);
 // 租户开关
 const tenantEnabled = ref(true);
+// 单位下拉开关：先隐藏，领导需要时改为 true 即可显示
+const showTenantSelect = ref(false);
 
 // 注册开关
 const register = ref(false);
@@ -233,108 +258,269 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
+/* ===== 清爽：浅色背景 + 白卡片，左右分栏 ===== */
 .login {
+  min-height: 100%;
   display: flex;
+  align-items: center;
   justify-content: center;
-  align-items: center;
-  height: 100%;
-  background-image: url('../assets/images/login-background.jpg');
-  background-size: cover;
-  background-position: center;
+  padding: 40px 24px 88px;
+  background:
+    radial-gradient(circle at 8% 10%, rgba(37, 99, 235, 0.08), transparent 30%),
+    radial-gradient(circle at 92% 88%, rgba(37, 99, 235, 0.08), transparent 30%),
+    linear-gradient(160deg, #f5f8ff 0%, #eef4ff 55%, #f8fbff 100%);
 }
 
-.title-box {
+.login-shell {
+  width: min(980px, 100%);
+  display: flex;
+  background: #fff;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid #e6edf9;
+  box-shadow: 0 24px 60px -26px rgba(30, 58, 138, 0.3);
+}
+
+/* ---------- 左侧品牌区 ---------- */
+.login-brand {
+  width: 46%;
+  padding: 44px 38px;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(150deg, #2563eb 0%, #1d4ed8 55%, #1e40af 100%);
+}
+.login-brand::before {
+  content: '';
+  position: absolute;
+  top: -90px;
+  right: -90px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, transparent 70%);
+}
+.login-brand::after {
+  content: '';
+  position: absolute;
+  bottom: -130px;
+  left: -70px;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, transparent 70%);
+}
+.brand-head,
+.brand-mid,
+.brand-foot {
+  position: relative;
+  z-index: 1;
+}
+.brand-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
-
-  .title {
-    margin: 0px auto 26px auto;
-    text-align: center;
-    color: var(--el-text-color-primary);
-    font-weight: 600;
-    letter-spacing: 0.5px;
-  }
-
-  :deep(.lang-select--style) {
-    line-height: 0;
-    color: var(--el-text-color-secondary);
+  gap: 12px;
+}
+.brand-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  :deep(svg) {
+    width: 24px;
+    height: 24px;
+    color: #fff;
   }
 }
+.brand-tt {
+  display: flex;
+  flex-direction: column;
 
+  strong {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  em {
+    font-size: 10px;
+    font-style: normal;
+    letter-spacing: 0.16em;
+    opacity: 0.72;
+    margin-top: 3px;
+    text-transform: uppercase;
+  }
+}
+.brand-mid {
+  margin-top: 26px;
+}
+.brand-title {
+  margin: 0;
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.brand-desc {
+  margin: 16px 0 0;
+  max-width: 320px;
+  font-size: 14px;
+  line-height: 1.9;
+  opacity: 0.9;
+}
+.brand-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 26px;
+}
+.highlight-chip {
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+}
+.brand-foot {
+  margin-top: 30px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* ---------- 右侧表单区 ---------- */
 .login-form {
-  border-radius: var(--app-radius-lg);
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  width: min(420px, 90vw);
-  padding: 32px 30px 12px 30px;
-  z-index: 1;
-  box-shadow: var(--app-shadow-lg);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  flex: 1;
+  min-width: 0;
+  padding: 42px 42px 30px;
+  background: #fff;
+
   .el-input {
-    height: 40px;
+    height: 48px;
+
     input {
-      height: 40px;
+      height: 48px;
     }
   }
 
   .input-icon {
-    height: 39px;
+    height: 47px;
     width: 14px;
-    margin-left: 0px;
+    margin-left: 0;
+  }
+}
+.title-box {
+  margin-bottom: 26px;
+
+  .title {
+    margin: 0;
+    color: #0f172a;
+    font-weight: 750;
+    font-size: 28px;
+    letter-spacing: -0.02em;
+  }
+  .subtitle {
+    margin: 8px 0 0;
+    color: #6b7280;
+    font-size: 13px;
+    line-height: 1.7;
   }
 }
 
-.login-tip {
-  font-size: 13px;
-  text-align: center;
-  color: #bfbfbf;
+.captcha-row {
+  :deep(.el-form-item__content) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 165px;
+    gap: 12px;
+  }
 }
 
+.form-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -2px 0 18px;
+}
+
+.submit-row {
+  margin-bottom: 0;
+}
+.submit-button {
+  width: 100%;
+  height: 50px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  box-shadow: 0 16px 30px -12px rgba(37, 99, 235, 0.55);
+}
 .login-form :deep(.el-input__wrapper) {
-  background-color: rgba(255, 255, 255, 0.9);
+  min-height: 48px;
+  background-color: #f9fbff;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px #dfe6f3 inset;
 }
-
 .login-form :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  background-color: #fff;
+  box-shadow:
+    0 0 0 1px #2563eb inset,
+    0 0 0 4px rgba(37, 99, 235, 0.12);
 }
-
-.login-form :deep(.el-button--primary) {
-  border-radius: var(--app-radius-md);
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25);
+.login-form :deep(.el-select__wrapper) {
+  min-height: 48px;
+  background-color: #f9fbff;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px #dfe6f3 inset;
 }
-
+.login-form :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 1px #2563eb inset,
+    0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+.login-form :deep(.el-checkbox__label) {
+  color: #6b7280;
+}
 .login-form :deep(.el-button.is-circle) {
-  background: rgba(15, 23, 42, 0.04);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  color: var(--el-text-color-regular);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
 }
-
 .login-form :deep(.el-button.is-circle:hover) {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.2);
+  background: rgba(37, 99, 235, 0.06);
+  border-color: rgba(37, 99, 235, 0.25);
+  color: #2563eb;
 }
 
 .login-code {
-  width: calc(37% - 10px);
-  height: 40px;
-  float: right;
-  margin-left: 10px;
+  height: 60px;
   box-sizing: border-box;
-  border-radius: var(--app-radius-sm);
+  border-radius: 12px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--el-border-color-light);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
 
   img {
-    cursor: pointer;
-    vertical-align: middle;
     display: block;
     width: 100%;
-    height: 40px;
-    object-fit: cover;
+    height: 60px;
+    object-fit: fill;
+    cursor: pointer;
   }
+}
+
+.captcha-row :deep(.login-code-tip) {
+  grid-column: 2;
+  grid-row: 2;
+  margin-top: 2px;
+  line-height: 14px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
 }
 
 .el-login-footer {
@@ -344,35 +530,48 @@ onMounted(() => {
   bottom: 0;
   width: 100%;
   text-align: center;
-  color: rgba(255, 255, 255, 0.75);
-  font-family: Arial, serif;
+  color: #94a3b8;
   font-size: 12px;
-  letter-spacing: 1px;
+  letter-spacing: 0.08em;
 }
 
 .login-code-img {
-  height: 40px;
+  height: 48px;
   padding-left: 0;
 }
 
-:global(html.dark) {
+/* ---------- 响应式 ---------- */
+@media (max-width: 960px) {
+  .login {
+    padding: 24px 14px 80px;
+  }
+  .login-shell {
+    flex-direction: column;
+  }
+  .login-brand {
+    width: 100%;
+    padding: 28px 26px;
+  }
+}
+@media (max-width: 640px) {
+  .login-brand {
+    display: none;
+  }
   .login-form {
-    background: rgba(17, 24, 39, 0.9);
-    border-color: rgba(148, 163, 184, 0.2);
+    padding: 28px 20px 22px;
   }
-
-  .login-form :deep(.el-input__wrapper) {
-    background-color: rgba(17, 24, 39, 0.7);
+  .title-box {
+    flex-direction: column;
   }
-
-  .login-form :deep(.el-button.is-circle) {
-    background: rgba(148, 163, 184, 0.12);
-    border-color: rgba(148, 163, 184, 0.25);
-    color: #e5e7eb;
+  .social-panel {
+    flex-direction: column;
+    align-items: flex-start;
   }
-
-  .el-login-footer {
-    color: rgba(226, 232, 240, 0.65);
+  .social-actions {
+    justify-content: flex-start;
+  }
+  .captcha-row :deep(.el-form-item__content) {
+    grid-template-columns: 1fr;
   }
 }
 </style>

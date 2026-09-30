@@ -43,23 +43,30 @@
         :data="deptList"
         row-key="deptId"
         border
+        stripe
         :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
         :default-expand-all="isExpandAll"
+        style="width: 100%"
       >
-        <el-table-column prop="deptName" label="部门名称" width="260"></el-table-column>
-        <el-table-column prop="deptCategory" align="center" label="类别编码" width="200"></el-table-column>
-        <el-table-column prop="orderNum" align="center" label="排序" width="200"></el-table-column>
-        <el-table-column prop="status" align="center" label="状态" width="100">
+        <el-table-column prop="deptName" label="部门名称" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="deptCategory" align="center" label="类别编码" min-width="200">
+          <template #default="scope">
+            <el-tag v-if="scope.row.deptCategory" size="small" type="info">{{ scope.row.deptCategory }}</el-tag>
+            <span v-else style="color: #c0c4cc">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="orderNum" align="center" label="排序" width="70" />
+        <el-table-column prop="status" align="center" label="状态" width="80">
           <template #default="scope">
             <dict-tag :options="sys_normal_disable" :value="scope.row.status" />
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" align="center" prop="createTime" width="200">
+        <el-table-column label="创建时间" align="center" prop="createTime" width="180">
           <template #default="scope">
             <span>{{ proxy.parseTime(scope.row.createTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" align="center" label="操作">
+        <el-table-column fixed="right" align="center" label="操作" width="180">
           <template #default="scope">
             <el-tooltip content="修改" placement="top">
               <el-button v-hasPermi="['system:dept:edit']" link type="primary" icon="Edit" @click="handleUpdate(scope.row)" />
@@ -208,6 +215,8 @@ const { queryParams, form, rules } = toRefs<PageData<DeptForm, DeptQuery>>(data)
 const getList = async () => {
   loading.value = true;
   const res = await listDept(queryParams.value);
+  // 按orderNum排序，确保handleTree构建树时子节点顺序正确
+  res.data.sort((a: any, b: any) => (a.orderNum ?? 0) - (b.orderNum ?? 0));
   const data = proxy?.handleTree<DeptVO>(res.data, 'deptId');
   if (data) {
     deptList.value = data;

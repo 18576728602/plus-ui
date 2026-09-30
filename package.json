@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "2.3.2",
+    "@handsontable/formulajs": "^2.0.2",
     "@highlightjs/vue-plugin": "2.1.2",
     "@vueup/vue-quill": "1.2.0",
     "@vueuse/core": "14.2.1",
@@ -32,6 +33,7 @@
     "element-plus": "2.13.5",
     "file-saver": "2.0.5",
     "highlight.js": "11.11.1",
+    "hot-formula-parser": "^4.0.0",
     "image-conversion": "2.1.1",
     "js-cookie": "3.0.5",
     "jsencrypt": "3.5.4",
