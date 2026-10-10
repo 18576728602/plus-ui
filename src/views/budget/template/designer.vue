@@ -598,7 +598,7 @@ const form = reactive<BudgetTemplateType>({
   templateCode: '',
   templateName: '',
   budgetYear: 2027,
-  templateType: 'BASE',
+  category: 'BUSINESS',
   status: '0',
   actualLabel: '\u4e0a\u4e00\u5e74\u5b9e\u9645\u5b8c\u6210\u503c',
   budgetLabel: '\u9884\u7b97\u503c(\u7f16\u5236)'
@@ -2039,7 +2039,7 @@ const saveColNames = async () => {
       templateCode: form.templateCode,
       templateName: form.templateName,
       budgetYear: form.budgetYear,
-      templateType: form.templateType,
+      category: form.category,
       actualLabel: colForm.actualLabel.trim(),
       budgetLabel: colForm.budgetLabel.trim()
     });
@@ -2067,7 +2067,7 @@ const saveTemplate = async () => {
       templateCode: form.templateCode,
       templateName: form.templateName,
       budgetYear: form.budgetYear,
-      templateType: form.templateType,
+      category: form.category,
       actualLabel: form.actualLabel,
       budgetLabel: form.budgetLabel
     });
@@ -2096,7 +2096,7 @@ const publishTemplate = async () => {
       templateCode: form.templateCode,
       templateName: form.templateName,
       budgetYear: form.budgetYear,
-      templateType: form.templateType,
+      category: form.category,
       actualLabel: form.actualLabel,
       budgetLabel: form.budgetLabel,
       status: '1'

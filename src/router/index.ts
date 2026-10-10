@@ -76,6 +76,20 @@ export const constantRoutes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/minimalCanvas',
+    component: Layout,
+    hidden: true,
+    redirect: 'noredirect',
+    children: [
+      {
+        path: 'index',
+        component: () => import('@/views/budget/templateDesigner/minimalCanvas.vue'),
+        name: 'MinimalCanvas',
+        meta: { title: '最小画布验证' }
+      }
+    ]
+  },
+  {
     path: '/user',
     component: Layout,
     hidden: true,

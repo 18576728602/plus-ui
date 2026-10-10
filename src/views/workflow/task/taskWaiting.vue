@@ -77,6 +77,9 @@
     </el-card>
     <!-- 申请人 -->
     <UserSelect ref="userSelectRef" :multiple="true" :data="selectUserIds" @confirm-call-back="userSelectCallBack"></UserSelect>
+    <!-- 审批详情弹窗 -->
+    <ApprovalDialog v-model="approveDialog.visible" :business-id="approveDialog.businessId"
+      :task-id="approveDialog.taskId" :type="approveDialog.type" />
   </div>
 </template>
 
@@ -89,8 +92,9 @@ import { RouterJumpVo } from '@/api/workflow/workflowCommon/types';
 const { proxy } = getCurrentInstance() as ComponentInternalInstance;
 const { wf_business_status } = toRefs<any>(proxy?.useDict('wf_business_status'));
 import UserSelect from '@/components/UserSelect';
-import { ref } from 'vue';
+import { ref, reactive } from 'vue';
 import { UserVO } from '@/api/system/user/types';
+import ApprovalDialog from '@/views/budget/approvalDetail/ApprovalDialog.vue';
 
 const userSelectRef = ref<InstanceType<typeof UserSelect>>();
 //提交组件
@@ -157,6 +161,14 @@ const getWaitingList = () => {
 };
 //办理
 const handleOpen = async (row: FlowTaskVO) => {
+  // 预算填报流程：弹出审批详情弹窗（类似高级详情页排版），而不是跳转填报表
+  if (row.flowCode === 'budget_fill') {
+    approveDialog.businessId = row.businessId;
+    approveDialog.taskId = row.id;
+    approveDialog.type = 'approval';
+    approveDialog.visible = true;
+    return;
+  }
   const routerJumpVo = reactive<RouterJumpVo>({
     businessId: row.businessId,
     taskId: row.id,
@@ -170,6 +182,13 @@ const handleOpen = async (row: FlowTaskVO) => {
 const openUserSelect = () => {
   userSelectRef.value.open();
 };
+//审批详情弹窗
+const approveDialog = reactive({
+  visible: false,
+  businessId: '',
+  taskId: '',
+  type: 'approval'
+});
 //确认选择申请人
 const userSelectCallBack = (data: UserVO[]) => {
   userSelectCount.value = 0;

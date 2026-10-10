@@ -1,53 +1,35 @@
 <template>
   <div class="app-container">
-    <!-- 顶部：类型切换 + 搜索 -->
-    <el-card shadow="never">
-      <div class="sm-row">
-        <el-radio-group v-model="queryParams.subjectType" size="small" @change="getTree">
-          <el-radio-button value="">全部</el-radio-button>
-          <el-radio-button value="SYS">集团共享(SYS)</el-radio-button>
-          <el-radio-button value="DEPT">公司私有(DEPT)</el-radio-button>
-        </el-radio-group>
-        <el-input
-          v-model="queryParams.keyword"
-          placeholder="科目编码 / 名称"
-          clearable
-          size="small"
-          style="width: 200px; margin-left: 12px"
-          @keyup.enter="getTree"
-          @clear="getTree"
-        />
-        <el-select
-          v-model="queryParams.categoryCode"
-          placeholder="业务分类"
-          clearable
-          size="small"
-          style="width: 150px; margin-left: 12px"
-          @change="getTree"
-        >
-          <el-option v-for="c in categoryOptions" :key="c.code" :label="c.name" :value="c.code" />
-        </el-select>
-        <el-button size="small" type="primary" icon="Search" @click="getTree">搜索</el-button>
-        <div class="sm-tools">
-          <el-checkbox v-model="queryParams.showDisabled" size="small" style="margin-left: 12px" @change="getTree">显示已停用</el-checkbox>
-          <span class="sm-stats">
-            <el-tag size="small" effect="plain">SYS 集团共享 {{ stats.sys }}</el-tag>
-            <el-tag size="small" effect="plain" type="warning">DEPT 公司私有 {{ stats.dept }}</el-tag>
-          </span>
-          <el-button size="small" link icon="Expand" @click="expandAll(true)">展开全部</el-button>
-          <el-button size="small" link icon="Fold" @click="expandAll(false)">折叠全部</el-button>
-          <el-button size="small" type="primary" plain icon="Plus" v-hasPermi="['budget:subject:add']" @click="handleAdd(null)">新建分类</el-button>
-        </div>
-      </div>
-    </el-card>
-
     <!-- 主体：左侧科目树 + 右侧详情面板 -->
     <div class="subject-layout">
       <!-- 左侧科目树（可折叠） -->
       <el-card class="tree-panel" shadow="never">
         <template #header>
-          <span class="panel-title">科目树</span>
+          <div class="tree-header">
+            <span class="panel-title">科目树</span>
+            <span class="tree-stats">
+              <span class="stat-pill" :class="{ active: queryParams.subjectType === '' }" @click="onFilter('')">全部 {{ stats.total }}</span>
+              <span class="stat-pill stat-sys" :class="{ active: queryParams.subjectType === 'SYS' }" @click="onFilter('SYS')">共享科目 {{ stats.sys }}</span>
+              <span class="stat-pill stat-dept" :class="{ active: queryParams.subjectType === 'DEPT' }" @click="onFilter('DEPT')">私有科目 {{ stats.dept }}</span>
+            </span>
+          </div>
         </template>
+        <div class="tree-search">
+          <el-input
+            v-model="queryParams.keyword"
+            placeholder="搜索科目编码 / 名称"
+            clearable
+            size="small"
+            class="tree-search-input"
+            @keyup.enter="getTree"
+            @clear="getTree"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+          <el-button size="small" type="primary" plain icon="Plus" v-hasPermi="['budget:subject:add']" @click="handleAddCategory">新建分类</el-button>
+        </div>
         <el-scrollbar class="tree-scroll">
           <el-tree
             ref="treeRef"
@@ -62,20 +44,43 @@
             highlight-current
             :current-node-key="currentNodeKey"
             @node-click="handleNodeClick"
+            @node-dblclick="onNodeDblclick"
           >
             <template #default="{ data }">
               <div class="sm-node" :class="{ 'is-off': !data._isCategory && data.validFlag === '0' }">
+                <el-icon v-if="data._isCategory || data.rowType === 'HEAD'" class="node-icon icon-cat"><Folder /></el-icon>
+                <el-icon v-else-if="data.subjectType === 'SYS'" class="node-icon icon-sys"><Aim /></el-icon>
+                <el-icon v-else class="node-icon icon-dept"><Location /></el-icon>
                 <template v-if="data._isCategory">
                   <span class="code-text">{{ data.categoryCode || '—' }}</span>
-                  <span class="sm-name">{{ data.categoryName }}</span>
+                  <el-input
+                    v-if="editingId === data.id"
+                    ref="editInputRef"
+                    v-model="editName"
+                    size="small"
+                    class="inline-edit-input"
+                    @keyup.enter="saveInlineEdit(data)"
+                    @keyup.esc="cancelInlineEdit"
+                    @blur="saveInlineEdit(data)"
+                  />
+                  <span v-else class="sm-name" @dblclick.stop="startInlineEdit(data)">{{ data.categoryName }}</span>
                   <span class="sm-cat-cnt">({{ (data.children || []).length }})</span>
                 </template>
+                <template v-else-if="data.rowType === 'HEAD'">
+                  <span class="code-text">{{ data.subjectCode }}</span>
+                  <el-input
+                    v-if="editingId === data.id"
+                    ref="editInputRef"
+                    v-model="editName"
+                    size="small"
+                    class="inline-edit-input"
+                    @keyup.enter="saveInlineEdit(data)"
+                    @keyup.esc="cancelInlineEdit"
+                    @blur="saveInlineEdit(data)"
+                  />
+                  <span v-else class="sm-name" @dblclick.stop="startInlineEdit(data)">{{ data.subjectName }}</span>
+                </template>
                 <template v-else>
-                  <span class="sm-tag">
-                    <el-tag :type="data.subjectType === 'SYS' ? 'primary' : 'warning'" size="small" effect="plain">
-                      {{ data.subjectType === 'SYS' ? 'SYS' : 'DEPT' }}
-                    </el-tag>
-                  </span>
                   <span class="code-text">{{ data.subjectCode }}</span>
                   <span class="sm-name">{{ data.subjectName }}</span>
                   <el-tag
@@ -89,9 +94,14 @@
                   <span v-if="data.refCount && data.refCount > 0" class="sm-ref" :title="`已被 ${data.refCount} 个方案/预算表挂接引用`">
                     挂接×{{ data.refCount }}
                   </span>
-                  <span v-if="data.subjectType === 'DEPT' && data.orgId" class="sm-org">({{ deptName(data.orgId) || data.orgId }})</span>
+
                   <span v-if="data.validFlag === '0'" class="sm-off">已停用</span>
                 </template>
+                <el-icon
+                  class="sm-del"
+                  title="删除"
+                  @click.stop="data._isCategory ? handleCategoryDelete(data) : handleDelete(data)"
+                ><Delete /></el-icon>
               </div>
             </template>
           </el-tree>
@@ -102,288 +112,194 @@
         </el-scrollbar>
       </el-card>
 
-      <!-- 右侧科目详情面板 -->
+      <!-- 右侧科目明细表格 -->
       <el-card class="detail-panel" shadow="never">
         <template #header>
-          <span class="panel-title">科目详情</span>
-        </template>
-        <el-empty v-if="!selectedNode" :image-size="80" description="点击左侧科目查看详情" />
-        <template v-else-if="selectedNode._isCategory">
-          <div class="detail-head">
-            <div class="detail-title">
-              <span class="detail-name">{{ selectedNode.categoryCode || '未分类' }} {{ selectedNode.categoryName }}</span>
-            </div>
-          </div>
-          <el-descriptions :column="1" border size="small" class="detail-desc">
-            <el-descriptions-item label="分类编码">{{ selectedNode.categoryCode || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="分类名称">{{ selectedNode.categoryName }}</el-descriptions-item>
-            <el-descriptions-item label="明细科目">{{ (selectedNode.children || []).length }} 个</el-descriptions-item>
-          </el-descriptions>
-          <div class="sm-tip" style="margin-bottom: 14px">分类为业务归并的虚拟分组，用于收纳并平铺该分类下的明细科目。</div>
-          <div class="detail-actions">
-            <el-button type="primary" size="small" icon="Plus" v-hasPermi="['budget:subject:add']" @click="handleAdd(selectedNode)"
-              >新增明细</el-button
-            >
+          <div class="detail-head-right">
+            <span class="panel-title">科目明细（{{ detailRows.length }}）</span>
             <el-button
-              v-if="selectedNode.categoryCode"
-              type="warning"
+              v-if="selectedNode"
+              type="primary"
               size="small"
-              icon="Edit"
+              icon="Plus"
               v-hasPermi="['budget:subject:add']"
-              @click="handleCategoryEdit(selectedNode)"
-              >编辑分类</el-button
-            >
-            <el-button
-              v-if="selectedNode.categoryCode"
-              type="danger"
-              size="small"
-              icon="Delete"
-              v-hasPermi="['budget:subject:add']"
-              @click="handleCategoryDelete(selectedNode)"
-              >删除分类</el-button
-            >
+              @click="handleAdd(selectedNode)"
+            >新增明细</el-button>
           </div>
         </template>
-        <template v-else>
-          <div class="detail-head">
-            <div class="detail-title">
-              <el-tag :type="selectedNode.subjectType === 'SYS' ? 'primary' : 'warning'" size="small" effect="plain">
-                {{ selectedNode.subjectType === 'SYS' ? '集团共享' : '公司私有' }}
+        <el-empty v-if="!selectedNode" :image-size="80" description="请在左侧选择科目分类或明细" />
+        <el-table v-else v-loading="loading" :data="detailRows" border stripe size="small" style="width: 100%">
+          <el-table-column prop="subjectCode" label="科目编码" width="120" />
+          <el-table-column prop="subjectName" label="科目名称" min-width="160" show-overflow-tooltip />
+          <el-table-column label="状态" width="80">
+            <template #default="{ row }">
+              <el-tag :type="row.validFlag === '0' ? 'danger' : 'success'" size="small">
+                {{ row.validFlag === '0' ? '已停用' : '有效' }}
               </el-tag>
-              <span class="detail-name">{{ selectedNode.subjectCode }} {{ selectedNode.subjectName }}</span>
-            </div>
-            <el-tag :type="selectedNode.validFlag === '0' ? 'danger' : 'success'" size="small">
-              {{ selectedNode.validFlag === '0' ? '已停用' : '有效' }}
-            </el-tag>
-          </div>
-          <div class="detail-cols">
-            <div class="detail-col">
-              <div class="sm-sec">基本信息</div>
-              <el-descriptions :column="1" border size="small" class="detail-desc">
-                <el-descriptions-item label="科目编码">{{ selectedNode.subjectCode }}</el-descriptions-item>
-                <el-descriptions-item label="科目名称">{{ selectedNode.subjectName }}</el-descriptions-item>
-                <el-descriptions-item label="行类型">{{ rowTypeText(selectedNode.rowType) }}</el-descriptions-item>
-                <el-descriptions-item label="业务分类">{{ selectedNode.categoryCode || '未分类' }}</el-descriptions-item>
-                <el-descriptions-item label="科目层级">{{ selectedNode.level ? selectedNode.level + ' 级' : '-' }}</el-descriptions-item>
-                <el-descriptions-item label="父级编码">{{ selectedNode.parentCode || '一级科目' }}</el-descriptions-item>
-                <el-descriptions-item v-if="selectedNode.subjectType === 'SYS'" label="适用公司范围">
-                  {{ scopeText(selectedNode.orgScope) }}
-                </el-descriptions-item>
-                <el-descriptions-item v-else label="归属公司">
-                  {{ deptName(selectedNode.orgId) || selectedNode.orgId || '-' }}
-                </el-descriptions-item>
-                <el-descriptions-item label="挂接引用">{{ selectedNode.refCount || 0 }} 个方案/预算表</el-descriptions-item>
-              </el-descriptions>
-            </div>
-            <div class="detail-col">
-              <div class="sm-sec">数据属性</div>
-              <el-descriptions :column="1" border size="small" class="detail-desc">
-                <el-descriptions-item label="数据类型">{{ dataTypeText(selectedNode.dataType) }}</el-descriptions-item>
-                <el-descriptions-item v-if="selectedNode.dataType !== 'TEXT'" label="计量单位">{{ selectedNode.unit || '-' }}</el-descriptions-item>
-                <el-descriptions-item v-if="selectedNode.dataType !== 'TEXT'" label="小数位">
-                  {{ decimalPlacesText(selectedNode.dataType, selectedNode.decimalPlaces) }}
-                </el-descriptions-item>
-                <el-descriptions-item v-if="selectedNode.dataType !== 'TEXT'" label="是否参与汇总">
-                  {{
-                    selectedNode.participateSummary === true || selectedNode.participateSummary === 1
-                      ? '参与'
-                      : selectedNode.participateSummary === false || selectedNode.participateSummary === 0
-                        ? '不参与'
-                        : '-'
-                  }}
-                </el-descriptions-item>
-                <el-descriptions-item label="必填项">
-                  {{
-                    selectedNode.requiredFlag === true || selectedNode.requiredFlag === 1
-                      ? '必填'
-                      : selectedNode.requiredFlag === false || selectedNode.requiredFlag === 0
-                        ? '选填'
-                        : '-'
-                  }}
-                </el-descriptions-item>
-                <el-descriptions-item v-if="selectedNode.dataType !== 'TEXT'" label="计算项">
-                  {{
-                    selectedNode.isFormula === true || selectedNode.isFormula === 1
-                      ? '公式计算'
-                      : selectedNode.isFormula === false || selectedNode.isFormula === 0
-                        ? '手工填报'
-                        : '-'
-                  }}
-                </el-descriptions-item>
-                <el-descriptions-item label="编制说明">
-                  <span class="detail-remark">{{ selectedNode.remark || '—' }}</span>
-                </el-descriptions-item>
-              </el-descriptions>
-            </div>
-          </div>
-          <div class="detail-actions">
-            <el-button type="primary" plain size="small" icon="Plus" v-hasPermi="['budget:subject:add']" @click="handleAdd(selectedNode)"
-              >新增下级</el-button
-            >
-            <el-button type="primary" size="small" icon="Edit" v-hasPermi="['budget:subject:edit']" @click="handleUpdate(selectedNode)"
-              >编辑</el-button
-            >
-            <el-button type="warning" size="small" v-hasPermi="['budget:subject:edit']" @click="handleValid(selectedNode)">
-              {{ selectedNode.validFlag === '0' ? '启用' : '停用' }}
-            </el-button>
-            <el-button type="danger" size="small" icon="Delete" v-hasPermi="['budget:subject:remove']" @click="handleDelete(selectedNode)"
-              >删除</el-button
-            >
-          </div>
-        </template>
+            </template>
+          </el-table-column>
+          <el-table-column label="行类型" width="90">
+            <template #default="{ row }">
+              <el-tag
+                v-if="rowTypeTag(row.rowType)"
+                :type="row.rowType === 'SUM' ? 'success' : row.rowType === 'REF' ? 'warning' : 'info'"
+                size="small"
+                effect="plain"
+              >{{ rowTypeTag(row.rowType) }}</el-tag>
+              <span v-else>—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="数据类型" width="90">
+            <template #default="{ row }">{{ dataTypeText(row.dataType) }}</template>
+          </el-table-column>
+          <el-table-column label="上级" min-width="150">
+            <template #default="{ row }">
+              <span :title="parentLabel(row)">{{ parentLabel(row) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="remark" label="编制说明" min-width="180" class-name="cell-wrap" />
+          <el-table-column label="创建人" width="100">
+            <template #default="{ row }">{{ row.createByName || row.createBy }}</template>
+          </el-table-column>
+          <el-table-column prop="createTime" label="创建时间" width="160" />
+          <el-table-column label="操作" width="180" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" link type="primary" v-hasPermi="['budget:subject:edit']" @click="handleUpdate(row)">编辑</el-button>
+              <el-button size="small" link type="warning" v-hasPermi="['budget:subject:edit']" @click="handleValid(row)">
+                {{ row.validFlag === '0' ? '启用' : '停用' }}
+              </el-button>
+              <el-button size="small" link type="danger" v-hasPermi="['budget:subject:remove']" @click="handleDelete(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
       </el-card>
     </div>
 
-    <!-- 新增/修改：右侧抽屉 -->
-    <el-drawer :model-value="dialog.visible" :title="dialog.title" size="440px" direction="rtl" @update:model-value="(v) => (dialog.visible = v)">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
-        <!-- ===== 基本信息 ===== -->
-        <div class="sm-sec">基本信息</div>
-        <el-form-item v-if="!isTopAdd" label="科目类型" prop="subjectType">
-          <el-radio-group v-model="form.subjectType" :disabled="!!form.id" @change="onTypeChange">
-            <el-radio-button value="SYS">集团共享(SYS)</el-radio-button>
-            <el-radio-button value="DEPT">公司私有(DEPT)</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item :label="isTopAdd ? '分类编码' : '科目编码'" prop="subjectCode">
-          <el-input v-model="form.subjectCode" disabled />
-          <div class="sm-tip" v-if="isTopAdd">编码由系统按分类顺序自动生成，不可修改</div>
-          <div class="sm-tip" v-else>编码由系统自动生成，切换上级后编码将按新父级重新生成</div>
-        </el-form-item>
-        <el-form-item label="科目名称" prop="subjectName">
-          <el-input
-            v-model="form.subjectName"
-            :placeholder="isTopAdd ? '请输入分类名称（如 营业收入预算类）' : '请输入科目名称（仅限文字/字母/数字）'"
-            @input="onNameInput"
-          />
-        </el-form-item>
-        <el-form-item v-if="!isTopAdd" label="业务分类" prop="categoryCode">
-          <el-select
-            v-model="form.categoryCode"
-            clearable
-            filterable
-            :disabled="categoryLocked"
-            placeholder="选择业务分类（如 01=公司基本信息/02=营业收入）"
-            style="width: 100%"
-            @change="onCategoryChange"
+    <!-- 新增/修改：居中弹窗 -->
+    <el-dialog
+      :model-value="dialog.visible"
+      :width="dialogWidth"
+      align-center
+      destroy-on-close
+      :close-on-click-modal="false"
+      @update:model-value="(v) => (dialog.visible = v)"
+    >
+      <template #header>
+        <div class="dialog-title-row">
+          <span class="dialog-title-text">{{ dialog.title }}</span>
+          <el-tooltip
+            v-if="isTopAdd"
+            content="分类为集团共享，对所有子公司可见；分类下允许子公司新增本公司私有明细。"
+            placement="top"
+            :show-after="200"
           >
-            <el-option v-for="c in categoryOptions" :key="c.code" :label="`${c.code} ${c.name}`" :value="c.code" />
-          </el-select>
-          <div class="sm-tip" v-if="categoryLocked && lockedCategoryText">
-            归属分类【{{ lockedCategoryText }}】，因新增下级而自动带入并锁定，不可跨分类
-          </div>
-          <div class="sm-tip" v-else>明细移到对应分类分组下，分类下平铺；新增下级会自动带入并锁定所属分类</div>
-        </el-form-item>
-        <el-form-item v-if="!isTopAdd" label="父级科目" prop="parentCode">
-          <el-select
-            v-model="form.parentCode"
-            filterable
-            clearable
-            placeholder="选择上一级（留空=顶层）"
-            style="width: 100%"
-            @change="onParentChange"
-          >
-            <el-option v-for="o in parentOptions" :key="o.value || '__top__'" :label="o.label" :value="o.value" />
-          </el-select>
-          <div class="sm-tip">父级仅展示当前业务分类下的科目；需跨分类切换请先在上方「业务分类」中选择新分类</div>
-        </el-form-item>
-        <el-form-item v-if="form.subjectType === 'DEPT'" label="归属公司" prop="orgId">
-          <el-select v-model="orgIdArr" multiple filterable placeholder="选择一个或多个归属公司" :disabled="!!form.id" style="width: 100%">
-            <el-option v-for="d in scopeCompanyOptions" :key="String(d.id)" :label="String(d.label).trim().replace(/^\s+/, '')" :value="d.id" />
-          </el-select>
-          <div class="sm-tip">可归属一个或多个公司，仅归属公司可见</div>
-        </el-form-item>
-        <el-form-item v-if="!isTopAdd && form.subjectType === 'SYS'" label="适用公司范围" prop="orgScope">
-          <div class="scope-block">
-            <el-radio-group v-model="restrictScope" @change="onRestrictChange">
-              <el-radio :value="false">全部</el-radio>
-              <el-radio :value="true">部分公司可见</el-radio>
-            </el-radio-group>
-            <template v-if="restrictScope">
-              <el-select
-                v-model="orgScopeArr"
-                multiple
-                clearable
-                filterable
-                placeholder="选择可看见此科目的公司"
-                style="width: 100%; margin-top: 6px"
-              >
-                <el-option v-for="d in scopeCompanyOptions" :key="d.id" :label="d.label" :value="String(d.id)" />
-              </el-select>
+            <el-icon class="cat-q-icon"><QuestionFilled /></el-icon>
+          </el-tooltip>
+        </div>
+      </template>
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+        <!-- ===== 分类模式：新建/编辑分类 ===== -->
+        <template v-if="isTopAdd">
+          <el-form-item prop="subjectCode">
+            <template #label>
+              <span class="req-star">*</span>
+              <span>分类编码</span>
             </template>
-            <div v-if="scopeSummary" class="scope-summary">
-              <span class="scope-summary-label">适用公司清单：</span>
-              {{ scopeSummary }}
-            </div>
-            <div class="sm-tip" v-if="restrictScope">仅被勾选的公司在填报时能看到此集团共享科目</div>
-          </div>
-        </el-form-item>
+            <el-input v-model="form.subjectCode" disabled />
+            <div class="sm-tip">编码由系统按分类顺序自动生成，不可修改</div>
+          </el-form-item>
+          <el-form-item label="分类名称" prop="subjectName">
+            <el-input v-model="form.subjectName" placeholder="请输入分类名称（如 研发费用预算类）" @input="onNameInput" />
+          </el-form-item>
+          <el-form-item label="父级分类" prop="parentCode">
+            <el-cascader
+              v-model="form.parentCode"
+              :options="headCascaderOptions"
+              :props="{ checkStrictly: true, emitPath: false }"
+              clearable
+              filterable
+              :disabled="catParentLocked"
+              placeholder="选择父级分类（留空 = 一级分类）"
+              style="width: 100%"
+              @change="onParentCategoryChange"
+            />
+            <div class="sm-tip">选择父级分类后，编码将基于父级自动生成；留空则创建为一级分类</div>
+          </el-form-item>
+        </template>
 
-        <!-- ===== 数据属性（当前仅前端界面，落库字段待补） ===== -->
-        <div class="sm-sec sm-sec-pad">数据属性</div>
-        <el-form-item v-if="!isTopAdd" label="数据类型" prop="dataType">
-          <el-radio-group v-model="form.dataType">
-            <el-radio-button value="CURRENCY">货币金额</el-radio-button>
-            <el-radio-button value="NUMBER">普通数字</el-radio-button>
-            <el-radio-button value="PERCENT">百分比</el-radio-button>
-            <el-radio-button value="TEXT">文本</el-radio-button>
+        <!-- ===== 明细模式：新增/编辑明细 ===== -->
+        <template v-else>
+          <div class="type-label">归属类型</div>
+          <el-radio-group v-model="form.subjectType" :disabled="!!form.id" @change="onTypeChange" class="type-cards">
+            <el-radio-button value="SYS" class="type-card">
+              <div class="card-row">
+                <el-icon class="cd-sys"><Aim /></el-icon>
+                <div class="cd-txt">
+                  <div class="cd-title">集团共享</div>
+                  <div class="cd-desc">所有子公司可见、可填报；仅集团可新增/修改/停用</div>
+                </div>
+              </div>
+            </el-radio-button>
+            <el-radio-button value="DEPT" class="type-card">
+              <div class="card-row">
+                <el-icon class="cd-dept"><Location /></el-icon>
+                <div class="cd-txt">
+                  <div class="cd-title">公司私有</div>
+                  <div class="cd-desc">仅归属子公司可见、可填报；集团汇总时归入父级科目</div>
+                </div>
+              </div>
+            </el-radio-button>
           </el-radio-group>
-          <div class="sm-tip">数据在填报/展示时的格式：货币金额按千分位、百分比按比率、文本原样展示</div>
-        </el-form-item>
-        <el-form-item v-if="!isTopAdd && form.dataType !== 'TEXT'" label="计量单位" prop="unit">
-          <el-select v-model="form.unit" clearable filterable allow-create placeholder="选择或输入单位" style="width: 100%">
-            <el-option v-for="u in unitOptions" :key="u" :label="u" :value="u" />
-          </el-select>
-          <div class="sm-tip">如 金额类常见「万元」，人数类「人/人次」</div>
-        </el-form-item>
-        <el-form-item v-if="!isTopAdd && form.dataType !== 'TEXT'" label="小数位" prop="decimalPlaces">
-          <div v-if="form.dataType === 'NUMBER'" class="sm-sel">
-            <el-input :model-value="'0（整数，人数类禁小数）'" disabled size="small" style="width: 200px" />
+
+          <div class="modal-grid">
+            <el-form-item label="归属公司" prop="orgId" class="grid-cell">
+              <el-input v-if="form.subjectType === 'SYS'" value="全部" disabled />
+              <el-select v-else v-model="form.orgId" filterable clearable placeholder="请选择归属公司" style="width: 100%">
+                <el-option v-for="d in scopeCompanyOptions" :key="String(d.id)" :label="String(d.label).trim().replace(/^\s+/, '')" :value="d.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="上级" prop="parentCode" class="grid-cell">
+              <el-select
+                v-model="form.parentCode"
+                filterable
+                :clearable="form.subjectType !== 'DEPT'"
+                :disabled="categoryLocked"
+                :placeholder="form.subjectType === 'DEPT' ? '请选择上级（私有科目必填，可选分类或明细）' : '选择上级（可选分类或明细，留空=顶层）'"
+                style="width: 100%"
+                @change="onParentChange"
+              >
+                <el-option v-for="o in parentOptions" :key="o.value || '__top__'" :label="o.label" :value="o.value" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="科目编码" prop="subjectCode" class="grid-cell">
+              <el-input v-model="form.subjectCode" disabled />
+            </el-form-item>
+            <el-form-item label="科目名称" prop="subjectName" class="grid-cell">
+              <el-input v-model="form.subjectName" placeholder="请输入科目名称" @input="onNameInput" />
+            </el-form-item>
+            <el-form-item label="行类型" prop="rowType" class="grid-cell">
+              <el-select v-model="form.rowType" style="width: 100%">
+                <el-option value="ITEM" label="明细" />
+                <el-option value="SUM" label="汇总" />
+                <el-option value="REF" label="基准" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="数据类型" prop="dataType" class="grid-cell">
+              <el-select v-model="form.dataType" style="width: 100%">
+                <el-option value="CURRENCY" label="货币金额" />
+                <el-option value="NUMBER" label="数值" />
+                <el-option value="PERCENT" label="百分比" />
+                <el-option value="TEXT" label="文本" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="编制说明" prop="remark" class="grid-cell-span">
+              <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="口径说明、填报要求等" />
+            </el-form-item>
           </div>
-          <el-input-number
-            v-else
-            v-model="form.decimalPlaces"
-            :min="0"
-            :max="6"
-            :precision="0"
-            controls-position="right"
-            size="small"
-            style="width: 100%"
-          />
-          <div class="sm-tip">
-            {{
-              form.dataType === 'NUMBER'
-                ? '普通数字（人数/次数等）固定整数，不允许有小数'
-                : form.dataType === 'PERCENT'
-                  ? '百分比小数位，如 2 表示 12.34%'
-                  : '货币金额小数位，如 2 表示 1234.56'
-            }}
+          <div class="cat-tip rules-tip">
+            <b>编码规则：</b>同父级下共享编码与私有编码各自唯一（允许跨归属重码）；层级：最多 4 级；汇总：私有明细自动并入父级的集团合计。
           </div>
-        </el-form-item>
-        <el-form-item v-if="!isTopAdd && form.dataType !== 'TEXT'" label="是否参与汇总" prop="participateSummary">
-          <div class="sm-sel">
-            <el-checkbox :model-value="form.participateSummary === true" @change="form.participateSummary = true">参与</el-checkbox>
-            <el-checkbox :model-value="form.participateSummary === false" @change="form.participateSummary = false">不参与</el-checkbox>
-          </div>
-          <div class="sm-tip">是否纳入上级汇总行/统计取数；选择「不参与」则该科目数据独立、不计入合计</div>
-        </el-form-item>
-        <el-form-item v-if="!isTopAdd" label="必填项" prop="requiredFlag">
-          <div class="sm-sel">
-            <el-checkbox :model-value="form.requiredFlag === true" @change="form.requiredFlag = true">必填</el-checkbox>
-            <el-checkbox :model-value="form.requiredFlag === false" @change="form.requiredFlag = false">选填</el-checkbox>
-          </div>
-          <div class="sm-tip">填报完整性校验：选择「必填」则该科目填报时不允许为空</div>
-        </el-form-item>
-        <el-form-item v-if="!isTopAdd && form.dataType !== 'TEXT'" label="计算项" prop="isFormula">
-          <div class="sm-sel">
-            <el-checkbox :model-value="form.isFormula === true" @change="form.isFormula = true">公式计算</el-checkbox>
-            <el-checkbox :model-value="form.isFormula === false" @change="form.isFormula = false">手工填报</el-checkbox>
-          </div>
-          <div class="sm-tip">公式科目：取值由公式引擎计算，填报时只读、自动生成</div>
-        </el-form-item>
-        <el-form-item label="编制说明" prop="remark">
-          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="填写该科目的编制口径、取数规则等" />
-        </el-form-item>
+        </template>
       </el-form>
       <template #footer>
         <div class="dialog-footer">
@@ -391,12 +307,12 @@
           <el-button @click="dialog.visible = false">取 消</el-button>
         </div>
       </template>
-    </el-drawer>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts" name="SubjectMaster">
-import { ref, reactive, computed, onMounted, watch, getCurrentInstance } from 'vue';
+import { ref, reactive, computed, onMounted, watch, getCurrentInstance, nextTick } from 'vue';
 import {
   listSubjectMasterTree,
   listSubjectMasterFlat,
@@ -416,6 +332,10 @@ const { proxy } = getCurrentInstance() as any;
 const loading = ref(false);
 const treeRef = ref();
 const treeData = ref<SubjectMasterVO[]>([]);
+/** 行内重命名：当前编辑节点 id */
+const editingId = ref<number | null>(null);
+const editName = ref('');
+const editInputRef = ref();
 const deptOptions = ref<any[]>([]);
 /** 是否限制适用公司范围（勾选=部分公司可见，不勾=全部公司可见） */
 const restrictScope = ref(false);
@@ -424,7 +344,7 @@ const orgIdArr = ref<(string | number)[]>([]);
 const selectedNode = ref<SubjectMasterVO | null>(null);
 const currentNodeKey = ref<number | null>(null);
 const expandedKeys = ref<number[]>([]);
-const stats = reactive({ sys: 0, dept: 0 });
+const stats = reactive({ sys: 0, dept: 0, total: 0 });
 
 const queryParams = reactive<{ subjectType: string; keyword?: string; categoryCode?: string; showDisabled: boolean }>({
   subjectType: '',
@@ -440,6 +360,14 @@ const categoryOptions = ref<{ code: string; name: string }[]>([]);
 const flatList = ref<SubjectMasterVO[]>([]);
 
 const dialog = reactive({ visible: false, title: '' });
+/** 分类弹窗灰色说明是否展开 */
+const catHint = ref(false);
+/** 新建分类时父级是否锁定（选中左侧分类节点后自动带入并锁定） */
+const catParentLocked = ref(false);
+/** 弹窗模式：category=新建/编辑分类(SubjectMaster HEAD汇总行)，detail=新增/编辑明细 */
+const dialogMode = ref<'category' | 'detail'>('detail');
+/** 弹窗宽度：分类窄窗(560px)，明细宽窗(760px) */
+const dialogWidth = computed(() => (isTopAdd.value ? '560px' : '760px'));
 const buttonLoading = ref(false);
 const formRef = ref();
 const form = ref<SubjectMasterForm>({});
@@ -458,6 +386,18 @@ const rules = reactive({
       },
       trigger: 'change'
     }
+  ],
+  parentCode: [
+    {
+      validator: (_r: any, value: any, cb: any) => {
+        if (form.value.subjectType === 'DEPT' && (value === undefined || value === null || value === '')) {
+          cb(new Error('公司私有科目必须选择上级分类，以便汇总时并入父级集团合计'));
+        } else {
+          cb();
+        }
+      },
+      trigger: 'change'
+    }
   ]
 });
 
@@ -467,7 +407,22 @@ const deptName = (id: any) => {
 };
 
 /** 行类型徽标文案：HEAD=分组表头 / SUM=汇总 / REF=只读基准；ITEM=默认明细不展示 */
-const rowTypeTag = (rt?: string) => (rt === 'HEAD' ? '分组' : rt === 'SUM' ? '汇总' : rt === 'REF' ? '基准' : '');
+/** 上级列展示：优先编码+名称（从完整科目树递归查找，含 HEAD 分组），否则仅编码 */
+const findParentName = (code?: string): string | undefined => {
+  if (!code) return undefined;
+  const stack = (treeData.value as SubjectMasterVO[]).slice();
+  while (stack.length) {
+    const cur = stack.pop()!;
+    if (cur.subjectCode === code && cur.subjectName) {
+      return code + ' ' + cur.subjectName;
+    }
+    (cur.children || []).forEach((c) => stack.push(c));
+  }
+  return undefined;
+};
+const parentLabel = (row: any) => (row.parentCode ? findParentName(row.parentCode) || row.parentCode : '—');
+
+const rowTypeTag = (rt?: string) => (rt === 'HEAD' ? '分组' : rt === 'ITEM' ? '明细' : rt === 'SUM' ? '汇总' : rt === 'REF' ? '基准' : '');
 
 /** 行类型完整文案：用于详情面板展示（含默认明细/未知） */
 const rowTypeText = (rt?: string) =>
@@ -548,8 +503,36 @@ const onNameInput = (val: string) => {
   form.value.subjectName = val.replace(/[^\u4e00-\u9fa5A-Za-z0-9（）(),，、。；;：:％%．./\-·—\s]/g, '');
 };
 
-/** 是否「新建顶级分类」（无父级、新增态）：切换弹窗内「科目/分类」术语 */
-const isTopAdd = computed(() => !form.value.parentCode && !form.value.id);
+/** 是否分类模式：新建/编辑分类(SubjectMaster HEAD汇总行) */
+const isTopAdd = computed(() => dialogMode.value === 'category');
+
+/** 父级分类级联选项：取 SubjectMaster HEAD 汇总行，按 parentCode 组装为多级树 */
+/** 父级分类级联选项：从 treeData 中提取 HEAD 汇总行（保持树层级结构） */
+const headCascaderOptions = computed(() => {
+  const opts: any[] = [];
+  const walk = (nodes: SubjectMasterVO[]): any[] => {
+    const result: any[] = [];
+    nodes.forEach((n) => {
+      if (n.rowType === 'HEAD' && n.validFlag !== '0') {
+        const children = (n.children || []).length ? walk(n.children || []) : undefined;
+        // 仅保留 HEAD 子节点作为级联选项，明细子节点不纳入父级选择
+        const headChildren = children?.filter((c: any) => c !== null) || undefined;
+        result.push({ value: n.subjectCode, label: `${n.subjectCode} ${n.subjectName}`, children: headChildren });
+      } else {
+        // 非 HEAD 节点：继续向下找 HEAD 子节点
+        const sub = (n.children || []).length ? walk(n.children || []) : [];
+        result.push(...sub);
+      }
+    });
+    return result;
+  };
+  return walk(treeData.value);
+});
+
+/** 切换父级分类时重新生成编码 */
+const onParentCategoryChange = () => {
+  applyNextCode();
+};
 
 /** 「父级科目」可选候选项：顶层 + 当前业务分类 + 当前分类下的所有有效科目
  *  规则：父级必须在同一业务分类内，不能跨分类选父级；
@@ -574,6 +557,23 @@ const parentOptions = computed(() => {
       if (catCodes.has(m.subjectCode)) return;
       opts.push({ value: m.subjectCode, label: `${m.subjectCode} ${m.subjectName}` });
     });
+  }
+  const curParent = form.value.parentCode;
+  if (curParent && !opts.some((o) => o.value === curParent)) {
+    const findIn = (nodes, code) => {
+      let found;
+      const stack = nodes || [];
+      stack.some((nd) => {
+        if (nd.subjectCode === code || nd.categoryCode === code) { found = nd; return true; }
+        const sub = findIn(nd.children, code);
+        if (sub) { found = sub; return true; }
+        return false;
+      });
+      return found;
+    };
+    const full = flatList.value.find((m) => m.subjectCode === curParent) || findIn(treeData.value, curParent);
+    const name = full ? (full.subjectName || full.categoryName || curParent) : curParent;
+    opts.push({ value: curParent, label: full ? `${(full.subjectCode || full.categoryCode)} ${name}` : curParent });
   }
   return opts;
 });
@@ -628,6 +628,26 @@ const resolveCategory = (node: SubjectMasterVO | null | undefined): { code: stri
   return null;
 };
 
+/** 右侧明细表格数据：选中分类则列该分类下全部明细；选明细则列其所属分类全部明细 */
+const detailRows = computed(() => {
+  if (!selectedNode.value) return [];
+  const node = selectedNode.value;
+  // 选中的是明细科目：仅展示自身
+  if (node.rowType !== 'HEAD' && !node._isCategory) {
+    return [node];
+  }
+  // 选中的是分类节点：递归收集所有非分类的明细后代
+  const result: SubjectMasterVO[] = [];
+  const walk = (n: SubjectMasterVO) => {
+    if (n.rowType !== 'HEAD' && !n._isCategory) {
+      result.push(n);
+    }
+    (n.children || []).forEach(walk);
+  };
+  (node.children || []).forEach(walk);
+  return result;
+});
+
 const getTree = async () => {
   loading.value = true;
   try {
@@ -647,26 +667,75 @@ const getTree = async () => {
     // 科目树 + 统计：单点失败不拖垮整页，仅提示
     treeData.value = await listSubjectMasterTree({ ...queryParams, keepHead: true, groupByCategory: true });
     try {
-      const allRes = await listSubjectMasterFlat({});
+      // 明细数据源从源头排除 HEAD 分类行(ITEM/SUM/REF 为实际科目明细)
+      const allRes = await listSubjectMasterFlat({ rowType: 'ITEM,SUM,REF' });
       const all = allRes.data || [];
       flatList.value = all;
       const active = all.filter((m: SubjectMasterVO) => m.validFlag !== '0');
       stats.sys = active.filter((m: SubjectMasterVO) => m.subjectType === 'SYS').length;
       stats.dept = active.filter((m: SubjectMasterVO) => m.subjectType === 'DEPT').length;
+      stats.total = active.length;
     } catch (e: any) {
       console.error('加载科目统计失败', e);
     }
-    // 初次加载：展开全部一级根节点；刷新时保留用户已展开状态，不再强制收起
+    // 递归收集树中所有节点 ID，用于保留嵌套节点的展开状态
+    const collectIds = (arr: SubjectMasterVO[], set: Set<number>) => {
+      (arr || []).forEach((m) => {
+        if (m.id != null) set.add(m.id);
+        if (m.children && m.children.length) collectIds(m.children, set);
+      });
+    };
+    const allIds = new Set<number>();
+    collectIds(treeData.value, allIds);
+    // 初次加载：展开全部一级根节点；刷新时保留用户已展开状态（含嵌套节点），不再强制收起
     if (expandedKeys.value.length === 0) {
       expandedKeys.value = treeData.value.map((m: SubjectMasterVO) => m.id);
     } else {
-      // 保留已展开的 key，指向当前仍存在节点
-      const valid = new Set(treeData.value.map((m: SubjectMasterVO) => m.id));
-      expandedKeys.value = expandedKeys.value.filter((k) => valid.has(k));
+      expandedKeys.value = expandedKeys.value.filter((k) => allIds.has(k));
     }
-    // 清空选中，引导用户从树选择
-    selectedNode.value = null;
-    currentNodeKey.value = null;
+    // 刷新后尝试保持原选中节点：在新树中按 ID 查找并重新选中，避免树折叠/选中丢失
+    const prevId = currentNodeKey.value;
+    if (prevId != null) {
+      const findNode = (arr: SubjectMasterVO[]): SubjectMasterVO | null => {
+        for (const m of arr || []) {
+          if (m.id === prevId) return m;
+          if (m.children && m.children.length) {
+            const r = findNode(m.children);
+            if (r) return r;
+          }
+        }
+        return null;
+      };
+      const found = findNode(treeData.value);
+      if (found) {
+        selectedNode.value = found;
+        currentNodeKey.value = prevId;
+      } else {
+        selectedNode.value = null;
+        currentNodeKey.value = null;
+      }
+    } else {
+      selectedNode.value = null;
+      currentNodeKey.value = null;
+    }
+    // el-tree 在 data 替换后会重置内部节点状态，需在 nextTick 强制恢复展开键与选中节点
+    await nextTick();
+    try {
+      if (treeRef.value) {
+        const keySet = new Set(expandedKeys.value);
+        const allNodes: any[] = treeRef.value.store?._getAllNodes?.() || [];
+        allNodes.forEach((nd: any) => {
+          if (nd.data && nd.data.id != null && keySet.has(nd.data.id)) {
+            nd.expanded = true;
+          }
+        });
+        if (currentNodeKey.value != null) {
+          treeRef.value.setCurrentKey(currentNodeKey.value);
+        }
+      }
+    } catch (treeErr) {
+      console.warn('恢复树展开/选中状态失败', treeErr);
+    }
   } catch (e: any) {
     console.error('科目树加载失败', e);
     proxy?.$modal.msgError(e?.msg || '科目树加载失败，请稍后重试');
@@ -700,9 +769,65 @@ const onRestrictChange = (val: boolean) => {
   }
 };
 
+const onFilter = (type: string) => {
+  queryParams.subjectType = type;
+  getTree();
+};
+
 const handleNodeClick = (data: SubjectMasterVO) => {
   selectedNode.value = data;
   currentNodeKey.value = data.id;
+};
+
+/** 双击分类节点编辑名称：HEAD 汇总行走 SubjectMaster 更新接口；预算分类分组走原分类编辑 */
+const onNodeDblclick = async (data: SubjectMasterVO) => {
+  // 双击分类节点 → 行内重命名（明细节点不处理）
+  if (data.rowType !== 'HEAD' && !data._isCategory) return;
+  await startInlineEdit(data);
+};
+
+/** 开始行内编辑分类名称 */
+const startInlineEdit = async (data: SubjectMasterVO) => {
+  editingId.value = data.id;
+  editName.value = data._isCategory ? (data.categoryName || '') : (data.subjectName || '');
+  await nextTick();
+  const input = editInputRef.value;
+  if (input) {
+    const el = (input as any).input || (input as any).$el?.querySelector('input') || input;
+    el?.focus?.();
+    el?.select?.();
+  }
+};
+
+/** 保存行内编辑 */
+const saveInlineEdit = async (data: SubjectMasterVO) => {
+  if (editingId.value === null) return;
+  const name = editName.value.trim();
+  const oldName = data._isCategory ? data.categoryName : data.subjectName;
+  editingId.value = null;
+  if (!name || name === oldName) return;
+  try {
+    if (data._isCategory) {
+      // BudgetCategory 分组：按 categoryCode 定位真实记录后更新
+      const res: any = await listBudgetCategory({ categoryCode: data.categoryCode });
+      const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+      const real = (list || []).find((c: any) => c.categoryCode === data.categoryCode);
+      if (!real) { proxy?.$modal.msgWarning('未找到该分类记录'); return; }
+      await updateBudgetCategory({ ...real, categoryName: name });
+    } else {
+      // SubjectMaster HEAD 汇总行
+      await updateSubjectMaster({ id: data.id, subjectName: name, subjectCode: data.subjectCode, rowType: 'HEAD' } as any);
+    }
+    proxy?.$modal.msgSuccess('分类名称已更新');
+    await getTree();
+  } catch (e: any) {
+    proxy?.$modal.msgError(e?.msg || '保存失败');
+  }
+};
+
+/** 取消行内编辑 */
+const cancelInlineEdit = () => {
+  editingId.value = null;
 };
 
 // 展开/折叠全部节点
@@ -739,6 +864,9 @@ const resetForm = () => {
   restrictScope.value = false;
   categoryLocked.value = false;
   lockedCategoryText.value = '';
+  catHint.value = false;
+  catParentLocked.value = false;
+  dialogMode.value = 'detail';
   formRef.value?.clearValidate();
 };
 
@@ -778,8 +906,32 @@ const applyCategoryNextCode = async () => {
   }
 };
 
+/** 新建分类：创建 SubjectMaster HEAD 汇总行，按 parentCode 实现多级分类 */
+const handleAddCategory = () => {
+  resetForm();
+  dialogMode.value = 'category';
+  form.value.rowType = 'HEAD';
+  form.value.isSummary = 1;
+  form.value.subjectType = 'SYS';
+  form.value.validFlag = '1';
+  // 选中分类节点则在其下创建子分类，否则创建一级分类
+  const sel = selectedNode.value;
+  if (sel && (sel.rowType === 'HEAD' || sel._isCategory)) {
+    form.value.parentCode = sel.subjectCode;
+    form.value.categoryCode = sel.categoryCode;
+    catParentLocked.value = true;
+  } else {
+    form.value.parentCode = undefined;
+    catParentLocked.value = false;
+  }
+  applyNextCode();
+  dialog.visible = true;
+  dialog.title = form.value.parentCode ? '新增子分类' : '新建分类';
+};
+
 const handleAdd = (parent?: SubjectMasterVO | null) => {
   resetForm();
+  dialogMode.value = 'detail';
   const onCategory = parent?._isCategory === true;
   if (!parent) {
     // 新建分类：仅需分类编码+分类名称（挂入 budget_category）
@@ -802,7 +954,7 @@ const handleAdd = (parent?: SubjectMasterVO | null) => {
     form.value.templateId = parent.templateId;
     form.value.templateCode = parent.templateCode || form.value.templateCode;
     const cat = resolveCategory(parent);
-    categoryLocked.value = !!cat;
+    categoryLocked.value = true;
     if (cat) {
       form.value.categoryCode = cat.code;
       lockedCategoryText.value = `${cat.name}(${cat.code})`;
@@ -810,8 +962,11 @@ const handleAdd = (parent?: SubjectMasterVO | null) => {
       form.value.categoryCode = parent.categoryCode || undefined;
     }
     const inherited = parent.orgScope ? String(parent.orgScope).split(',').filter(Boolean) : parent.orgId != null ? [String(parent.orgId)] : [];
-    orgIdArr.value = inherited.map((s) => (/^\d+$/.test(s) ? Number(s) : s));
-    form.value.orgScope = inherited.join(',');
+    if (inherited.length) {
+      const first = inherited[0];
+      form.value.orgId = /^\d+$/.test(first) ? Number(first) : first;
+      form.value.orgScope = inherited.join(',');
+    }
     applyNextCode();
   }
   dialog.visible = true;
@@ -819,7 +974,7 @@ const handleAdd = (parent?: SubjectMasterVO | null) => {
     ? '新建分类'
     : onCategory
       ? `新增【${parent.categoryName || parent.categoryCode}】分类明细`
-      : `新增【${parent.subjectCode}】下级科目`;
+      : `新增【${parent.subjectCode} ${parent.subjectName || ''}】下级科目`;
 };
 
 /** 编辑分类（按 categoryCode 定位真实记录预填弹框） */
@@ -844,37 +999,30 @@ const handleCategoryEdit = async (data: SubjectMasterVO) => {
   }
 };
 
-/** 删除分类（校验分类下无有效明细由后端兜底） */
+/** 删除分类：图片规则——分组不需要停用，但 flatList 中 categoryCode 匹配且未停用 → 拦截 */
 const handleCategoryDelete = async (data: SubjectMasterVO) => {
   if (!data.categoryCode) return;
-  try {
-    const res: any = await listBudgetCategory({ categoryCode: data.categoryCode });
-    const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
-    const real = (list || []).find((c: any) => c.categoryCode === data.categoryCode);
-    if (!real || real.id == null) {
-      proxy?.$modal.msgWarning('未找到该分类记录');
-      return;
-    }
-  } catch {
-    /* 继续走确认 */
-  }
-  try {
-    await proxy?.$modal.confirm(`确认删除分类「${data.categoryCode} ${data.categoryName}」？分类下若有有效明细科目将无法删除。`);
-  } catch {
+  const activeSub = flatList.value.filter((m: SubjectMasterVO) => m.categoryCode === data.categoryCode && m.validFlag !== '0');
+  if (activeSub.length > 0) {
+    proxy?.$modal.msgWarning(`分类「${data.categoryCode}」下尚有 ${activeSub.length} 条未停用明细科目，请先停用后再删除。`);
     return;
   }
+  let realId: any = null;
   try {
     const res: any = await listBudgetCategory({ categoryCode: data.categoryCode });
     const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
-    const real = (list || []).find((c: any) => c.categoryCode === data.categoryCode);
-    if (!real || real.id == null) return;
-    await delBudgetCategory(real.id);
+    const real = (list || []).find((cc: any) => cc.categoryCode === data.categoryCode);
+    if (real && real.id != null) realId = real.id;
+  } catch { /* 忽略 */ }
+  if (realId == null) { proxy?.$modal.msgWarning('未找到该分类记录'); return; }
+  try { await proxy?.$modal.confirm(`确认删除分类「${data.categoryCode} ${data.categoryName}」？`); } catch { return; }
+  try {
+    await delBudgetCategory(realId);
     proxy?.$modal.msgSuccess('删除成功');
     await getTree();
-  } catch (e: any) {
-    proxy?.$modal.msgError(e?.msg || '删除失败');
-  }
+  } catch (e: any) { proxy?.$modal.msgError(e?.msg || '删除失败'); }
 };
+
 
 /** 编辑时保存原始编码，用于提交前检测编码变更并提示用户 */
 const originalCode = ref<string | undefined>(undefined);
@@ -882,16 +1030,17 @@ const originalCode = ref<string | undefined>(undefined);
 const handleUpdate = async (data: SubjectMasterVO) => {
   const res = await getSubjectMaster(data.id);
   Object.assign(form.value, res.data);
+  // 数据类型为历史遗留展示属性，后端不再存储；未回显时按默认(货币金额)兜底，避免编辑时为空
+  if (!form.value.dataType) form.value.dataType = 'CURRENCY';
   originalCode.value = res.data.subjectCode;
   if (form.value.subjectType === 'DEPT') {
-    // DEPT 归属多公司：回填 orgIdArr（主归属 orgId 合并上 orgScope，二者并集展示）
     const base = form.value.orgId != null ? [String(form.value.orgId)] : [];
     const extra = form.value.orgScope ? String(form.value.orgScope).split(',').filter(Boolean) : [];
-    orgIdArr.value = [...new Set([...base, ...extra])].map((s) => (/^\d+$/.test(s) ? Number(s) : s));
-    restrictScope.value = false;
+    const first = [...new Set([...base, ...extra])][0];
+    form.value.orgId = first ? (/^\d+$/.test(first) ? Number(first) : first) : undefined;
   } else {
-    orgScopeArr.value = (form.value.orgScope ? String(form.value.orgScope) : '').split(',').filter(Boolean);
-    restrictScope.value = orgScopeArr.value.length > 0;
+    const scopeList = (form.value.orgScope ? String(form.value.orgScope) : '').split(',').filter(Boolean);
+    form.value.orgId = scopeList[0] ? (/^\d+$/.test(scopeList[0]) ? Number(scopeList[0]) : scopeList[0]) : undefined;
   }
   dialog.visible = true;
   dialog.title = `修改科目：${data.subjectCode}`;
@@ -921,7 +1070,7 @@ const checkDuplicateName = (): SubjectMasterVO | null => {
 const submitForm = () => {
   formRef.value.validate((valid: boolean) => {
     if (!valid) return;
-    // 新建/编辑分类：写入 budget_category（编码只读、名称必填）
+    // 新建/编辑分类：写入 SubjectMaster（rowType=HEAD 汇总行，parentCode 实现多级分类）
     if (isTopAdd.value) {
       const name = (form.value.subjectName || '').trim();
       if (!name) {
@@ -930,18 +1079,26 @@ const submitForm = () => {
       }
       if (!form.value.subjectCode || form.value.subjectCode.includes('?')) {
         proxy?.$modal.msgWarning('请等待分类编码生成后再保存');
-        applyCategoryNextCode();
+        applyNextCode();
         return;
       }
       buttonLoading.value = true;
       (async () => {
         try {
-          if (categoryEditId.value) {
-            await updateBudgetCategory({ id: categoryEditId.value, categoryCode: form.value.subjectCode, categoryName: name });
-            proxy?.$modal.msgSuccess('修改成功');
+          const payload = {
+            ...form.value,
+            subjectName: name,
+            rowType: 'HEAD',
+            isSummary: 1,
+            subjectType: 'SYS',
+            validFlag: form.value.validFlag || '1'
+          };
+          if (form.value.id) {
+            await updateSubjectMaster(payload);
+            proxy?.$modal.msgSuccess('分类修改成功');
           } else {
-            await addBudgetCategory({ categoryCode: form.value.subjectCode, categoryName: name, sort: 1 });
-            proxy?.$modal.msgSuccess('新增成功');
+            await addSubjectMaster(payload);
+            proxy?.$modal.msgSuccess('分类新增成功');
           }
           dialog.visible = false;
           await getTree();
@@ -964,20 +1121,16 @@ const submitForm = () => {
       return;
     }
     if (form.value.subjectType === 'SYS') {
-      if (restrictScope.value && orgScopeArr.value.length === 0) {
-        proxy?.$modal.msgWarning('已选择"部分公司可见"，请至少勾选一家公司');
-        return;
-      }
-      form.value.orgScope = orgScopeArr.value.length ? orgScopeArr.value.join(',') : undefined;
+      // 集团共享：指定公司则仅该公司可见，留空则全部公司可见
+      form.value.orgScope = form.value.orgId ? String(form.value.orgId) : undefined;
       form.value.orgId = undefined;
     } else {
-      // DEPT 私有科目：可归属一个或多个公司 —— orgScope 存全部归属公司(逗号分隔)，orgId 存第一个为主归属
-      if (orgIdArr.value.length === 0) {
-        proxy?.$modal.msgWarning('请至少选择一个归属公司');
+      // 公司私有：必须指定归属公司
+      if (!form.value.orgId) {
+        proxy?.$modal.msgWarning('请选择归属公司');
         return;
       }
-      form.value.orgScope = orgIdArr.value.join(',');
-      form.value.orgId = Number(orgIdArr.value[0]);
+      form.value.orgScope = String(form.value.orgId);
     }
     buttonLoading.value = true;
     (async () => {
@@ -1058,15 +1211,15 @@ const handleValid = async (data: SubjectMasterVO) => {
 };
 
 const handleDelete = (data: SubjectMasterVO) => {
-  // 守卫：仅已停用的科目允许删除；未停用必须先停用才能删除
-  if (!data.validFlag || data.validFlag === '1') {
+  const isCat = data._isCategory || data.rowType === 'HEAD';
+  // 分类(HEAD)直接删除；明细科目必须先停用
+  if (!isCat && data.validFlag !== '0') {
     proxy?.$modal.msgWarning(`科目「${data.subjectCode} ${data.subjectName}」尚未停用，请先停用后再删除`);
     return;
   }
-  proxy?.$modal.confirm(`确认删除科目「${data.subjectCode} ${data.subjectName}」？删除仅作用于主数据字典，不影响已挂接引用。`).then(async () => {
-    await delSubjectMaster(data.id);
-    proxy?.$modal.msgSuccess('删除成功');
-    await getTree();
+  const label = isCat ? (data._isCategory ? data.categoryName : data.subjectName) : `${data.subjectCode} ${data.subjectName}`;
+  proxy?.$modal.confirm(`确认删除${isCat ? '分类' : '科目'}「${label}」？`).then(async () => {
+    await delSubjectMaster(data.id); proxy?.$modal.msgSuccess('删除成功'); await getTree();
   });
 };
 
@@ -1088,10 +1241,6 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
 }
-.sm-stats {
-  display: inline-flex;
-  gap: 6px;
-}
 .panel-title {
   font-weight: 600;
   font-size: 14px;
@@ -1105,7 +1254,7 @@ onMounted(() => {
   min-height: 420px;
 }
 .tree-panel {
-  flex: 0 0 46%;
+  flex: 0 0 20%;
   display: flex;
   flex-direction: column;
 }
@@ -1128,12 +1277,35 @@ onMounted(() => {
   overflow: auto;
 }
 
+/* 编制说明列文字换行 */
+.detail-panel :deep(.el-table .cell-wrap) {
+  white-space: pre-line;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.tree-panel :deep(.el-tree-node__content) {
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  height: auto !important;
+  line-height: 1.5 !important;
+}
+.tree-panel :deep(.el-tree-node__label) {
+  display: block !important;
+  width: 100% !important;
+  overflow: hidden !important;
+}
 .sm-node {
   display: flex;
   align-items: center;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   font-size: 13px;
   padding-right: 4px;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 .sm-node .sm-tag {
   display: inline-flex;
@@ -1144,11 +1316,15 @@ onMounted(() => {
   color: var(--el-color-primary);
   font-weight: 600;
   margin-right: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .sm-node .sm-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  max-width: 220px;
 }
 .sm-node .sm-rt {
   margin-left: 6px;
@@ -1192,12 +1368,37 @@ onMounted(() => {
   color: #f56c6c;
   flex-shrink: 0;
 }
+.sm-node .inline-edit-input {
+  width: 160px;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+.sm-node .sm-del {
+  margin-left: 8px;
+  padding: 2px 4px;
+  color: #c0c4cc;
+  font-size: 18px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.sm-node:hover .sm-del {
+  opacity: 1;
+}
+.sm-node .sm-del:hover {
+  color: #f56c6c;
+}
 .sm-node.is-off .sm-name,
 .sm-node.is-off .code-text {
   color: #c0c4cc;
   text-decoration: line-through;
 }
 
+.detail-head-right {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 .detail-head {
   display: flex;
   align-items: center;
@@ -1271,5 +1472,194 @@ onMounted(() => {
 }
 .scope-summary-label {
   color: var(--el-text-color-secondary, #909399);
+}
+.tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.tree-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tree-search {
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tree-search .tree-search-input {
+  flex: 1;
+  min-width: 0;
+}
+.tree-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.stat-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 500;
+  cursor: pointer;
+  background: #fff;
+  color: #606266;
+  border: 1px solid #d9d9d9;
+  transition: opacity 0.2s, box-shadow 0.2s;
+}
+.stat-pill:hover {
+  opacity: 0.85;
+}
+.stat-pill.active {
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.4);
+}
+.stat-sys {
+  background: #1890ff;
+  color: #fff;
+  border-color: #1890ff;
+}
+.stat-dept {
+  background: #fffbe6;
+  color: #d4b106;
+  border: 1px solid #ffe58f;
+}
+.node-icon {
+  flex-shrink: 0;
+  margin-right: 6px;
+  font-size: 15px;
+  line-height: 1;
+}
+.icon-cat {
+  color: #e6a23c;
+}
+.icon-sys {
+  color: #1890ff;
+}
+.icon-dept {
+  color: #52c41a;
+}
+.type-label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+.type-cards {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+.type-cards :deep(.el-radio-button) {
+  flex: 1;
+  padding: 0;
+}
+.type-cards :deep(.el-radio-button__inner) {
+  width: 100%;
+  height: auto;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #d9d9d9;
+  box-shadow: none;
+  text-align: left;
+  line-height: 1.4;
+}
+.type-cards :deep(.el-radio-button.is-active .el-radio-button__inner) {
+  border-color: #1890ff;
+  background: #ecf5ff;
+  color: #303133;
+}
+.card-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.card-row .el-icon {
+  font-size: 20px;
+}
+.cd-sys {
+  color: #1890ff;
+}
+.cd-dept {
+  color: #52c41a;
+}
+.cd-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cd-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+.cd-desc {
+  font-size: 12px;
+  color: #909399;
+}
+.modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 18px;
+  margin-top: 14px;
+}
+.modal-grid .el-form-item {
+  margin-bottom: 8px;
+}
+.modal-grid :deep(.el-input__wrapper) {
+  height: 32px;
+  line-height: 32px;
+  padding: 0 11px;
+}
+.grid-cell-span {
+  grid-column: span 2;
+}
+.cat-tip {
+  margin-top: 6px;
+  padding: 10px 12px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.6;
+}
+.cat-tip b {
+  color: #303133;
+  font-weight: 600;
+}
+.rules-tip {
+  margin-top: 14px;
+  margin-left: 100px;
+  font-size: 12px;
+}
+.dialog-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dialog-title-text {
+  font-size: 16px;
+  font-weight: 600;
+}
+.cat-q-icon {
+  font-size: 16px;
+  color: #909399;
+  cursor: help;
+}
+.req-star {
+  color: #f56c6c;
+  margin-right: 4px;
+}
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>

@@ -21,6 +21,8 @@ export default defineConfig(({ mode, command }) => {
     server: {
       host: '0.0.0.0',
       port: Number(env.VITE_APP_PORT),
+      watch: { usePolling: true, interval: 500 },
+      watch: { usePolling: true, interval: 500 },
       open: true,
       proxy: {
         [env.VITE_APP_BASE_API]: {

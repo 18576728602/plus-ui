@@ -46,5 +46,9 @@ export const delFieldVisibility = (ids: number[]): AxiosPromise<void> => {
 export const resolveFieldPermissions = (
   params: { templateId: number; planId?: number; budgetYear?: number; orgId: number; subjectIds: Array<number> }
 ): AxiosPromise<FieldPermissionMap> => {
-  return request({ url: '/budget/fieldVisibility/resolve', method: 'get', params });
+  return request({
+    url: '/budget/fieldVisibility/resolve',
+    method: 'get',
+    params: { ...params, subjectIds: params.subjectIds.join(',') },
+  });
 };

@@ -2,33 +2,6 @@
   <div class="app-container">
     <!-- ===================== 列表视图 ===================== -->
     <template v-if="viewMode === 'list'">
-      <!-- 概览统计卡片 -->
-      <el-row :gutter="16" class="plan-stats">
-        <el-col :xs="12" :sm="6">
-          <div class="stat-card stat-primary">
-            <div class="stat-lbl">方案总数</div>
-            <div class="stat-val">{{ planStats.total }}</div>
-          </div>
-        </el-col>
-        <el-col :xs="12" :sm="6">
-          <div class="stat-card">
-            <div class="stat-lbl">编辑中</div>
-            <div class="stat-val stat-draft">{{ planStats.draft }}</div>
-          </div>
-        </el-col>
-        <el-col :xs="12" :sm="6">
-          <div class="stat-card">
-            <div class="stat-lbl">已发布</div>
-            <div class="stat-val stat-ok">{{ planStats.published }}</div>
-          </div>
-        </el-col>
-        <el-col :xs="12" :sm="6">
-          <div class="stat-card">
-            <div class="stat-lbl">已作废</div>
-            <div class="stat-val stat-off">{{ planStats.closed }}</div>
-          </div>
-        </el-col>
-      </el-row>
       <!-- 搜索栏 -->
       <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch">
         <el-form-item label="方案名称" prop="planName">
@@ -61,6 +34,7 @@
 
       <!-- 数据表格 -->
       <el-table v-loading="loading" :data="planList" border style="width: 100%">
+        <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column label="方案编码" prop="planCode" width="150" align="center" />
         <el-table-column label="方案名称" prop="planName" min-width="150" show-overflow-tooltip />
         <el-table-column label="预算年度" prop="budgetYear" width="90" align="center" />
@@ -200,82 +174,33 @@
 
           <div class="plan-conn"><el-icon><ArrowDown /></el-icon></div>
 
-            <!-- ③ 科目明细（勾选树） -->
-            <div class="plan-section">
-              <div class="plan-section-title">
-                <span class="plan-step" :class="{ 'is-locked': step3Locked }">
-                  <el-icon v-if="step3Locked"><Lock /></el-icon>
-                  <template v-else>3</template>
-                </span>科目明细
-              </div>
-              <template v-if="form.id">
-              <div class="items-toolbar">
-                <div class="items-toolbar-left">
-                  <el-checkbox v-model="cascadeOn" :disabled="readonly" @change="onCascadeChange">父子联动</el-checkbox>
-                  <el-tooltip content="展开全部" placement="top">
-                    <el-button size="small" circle text icon="Expand" @click="expandAllItems" />
-                  </el-tooltip>
-                  <el-tooltip content="收起全部" placement="top">
-                    <el-button size="small" circle text icon="Fold" @click="collapseAllItems" />
-                  </el-tooltip>
-                  <el-divider direction="vertical" />
-                  <el-button size="small" type="primary" plain :disabled="readonly" @click="itemsCheckAll">全选</el-button>
-                  <el-button size="small" type="warning" plain :disabled="readonly" @click="itemsUncheckAll">全不选</el-button>
-                  <el-tooltip content="全选=将已停用科目还原纳入；全不选=停用方案全部科目" placement="top">
-                    <el-icon class="items-hint-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
-                </div>
-                <div class="items-toolbar-right">
-                  <el-button v-if="!readonly" type="success" size="small" plain icon="FolderAdd" :disabled="!form.id" @click="openMasterImport" v-hasPermi="['budget:templateItem:add']">从科目库导入</el-button>
-                  <el-button v-if="!readonly" type="primary" size="small" icon="Plus" :disabled="!canAddChild" @click="handleAddChildItem" v-hasPermi="['budget:templateItem:add']">新增子科目</el-button>
-                  <el-button v-if="!readonly" type="warning" size="small" plain icon="RefreshLeft" :badge="disabledTotal" @click="openItemsDisabled">已停用</el-button>
-                  <el-button size="small" icon="Search" @click="reloadItems">刷新</el-button>
-                </div>
-              </div>
-              <div class="items-search">
-                <el-input v-model="itemsTreeFilter" placeholder="搜索科目编码/名称" clearable size="small" :prefix-icon="Search" />
-              </div>
-              <div class="items-tree-wrap" v-loading="itemsLoading">
-                <el-tree
-                  ref="itemsTreeRef"
-                  :data="itemsTreeData"
-                  node-key="id"
-                  :props="{ children: 'children', label: 'itemName' }"
-                  :filter-node-method="filterItemsNode"
-                  :expand-on-click-node="false"
-                  :check-strictly="!cascadeOn"
-                  :default-checked-keys="defaultCheckedItems"
-                  show-checkbox
-                  highlight-current
-                  class="items-tree-body"
-                  @node-click="onItemsNodeClick"
-                >
-                  <template #default="{ data }">
-                    <span class="items-tree-node">
-                      <span v-if="data.isTemplate" class="items-tree-tpl">{{ data.templateCode }}·{{ data.itemName }}</span>
-                      <span v-else-if="data.isAll" class="items-tree-tpl">全部科目</span>
-                      <span v-else>{{ data.itemCode ? data.itemCode + ' ' : '' }}{{ data.itemName }}</span>
-                      <el-tag v-if="data.isTemplate" size="small" type="primary" effect="plain" class="items-node-tag">基础</el-tag>
-                      <span v-if="!data.isAll && !data.isTemplate && !readonly" class="items-node-ops">
-                        <el-button link type="primary" size="small" icon="Plus" @click.stop="handleAddChildItemBy(data)">子科目</el-button>
-                        <el-button link type="info" size="small" icon="Edit" @click.stop="handleUpdateItem(data)">编辑</el-button>
-                        <el-button link type="danger" size="small" icon="Delete" @click.stop="handleStopItem(data)">停用</el-button>
-                      </span>
-                    </span>
-                  </template>
-                </el-tree>
-              </div>
-              </template>
-              <div v-else-if="!readonly" class="items-lock">
-                <div class="items-lock-icon"><el-icon :size="28"><Lock /></el-icon></div>
-                <div class="items-lock-text">保存基本信息生成方案后，即可为本方案配置科目明细</div>
-                <el-button type="primary" icon="Top" @click="scrollToBasic">去保存基本信息</el-button>
-              </div>
-              <div v-else class="items-empty">
-                <el-icon :size="20" color="#c0c4cc"><Document /></el-icon>
-                <span style="color: var(--el-text-color-secondary); font-size: 13px">暂无科目明细</span>
-              </div>
+          <!-- 3. 挂载模板 -->
+          <div class="plan-section">
+            <div class="plan-section-title"><span class="plan-step">3</span>挂载模板</div>
+            <div class="plan-section-desc">选择本方案需要填报的预算模板，填报内容与科目明细由所挂载的模板决定。</div>
+            <div v-if="!form.id" class="tpl-lock">
+              <el-icon class="tpl-lock-icon"><InfoFilled /></el-icon>
+              <span>保存基本信息生成方案后，即可为本方案挂载预算模板。</span>
             </div>
+            <el-transfer
+              v-else
+              v-model="mountedTemplateKeys"
+              :data="availableTemplateData"
+              :titles="['可选模板', '已挂载模板']"
+              :button-texts="['', '']"
+              :props="{ key: 'id', label: 'label' }"
+              filterable
+              :filter-method="tplFilter"
+              class="tpl-transfer"
+              @change="handleTemplateChange"
+            >
+              <template #default="{ option }">
+                <span>{{ option.label }}</span>
+                <span style="color:#909399;margin-left:8px;font-size:12px;">{{ option.category }}</span>
+              </template>
+            </el-transfer>
+          </div>
+
 
           <!-- 页脚操作 -->
           <div class="plan-page-footer">
@@ -291,124 +216,14 @@
       </div>
     </template>
 
-    <!-- 已停用科目还原弹窗 -->
-    <el-dialog title="已停用科目（可还原）" v-model="itemsDisabledDialog" width="760px" append-to-body>
-      <el-form :inline="true" :model="itemsDisabledQuery">
-        <el-form-item label="模板编号">
-          <el-input v-model="itemsDisabledQuery.templateCode" placeholder="01-16" clearable @keyup.enter="loadDisabledItems" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" icon="Search" @click="loadDisabledItems">搜索</el-button>
-        </el-form-item>
-      </el-form>
-      <el-table v-loading="itemsDisabledLoading" border :data="disabledItemsList" height="380">
-        <el-table-column label="模板编号" align="center" prop="templateCode" width="90" />
-        <el-table-column label="科目编码" align="center" prop="itemCode" width="120" />
-        <el-table-column label="科目名称" align="center" prop="itemName" />
-        <el-table-column label="层级" align="center" prop="itemLevel" width="60" />
-        <el-table-column label="操作" align="center" width="100">
-          <template #default="scope">
-            <el-button link type="primary" icon="RefreshLeft" @click="doRestoreItem(scope.row)">还原</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <pagination v-show="disabledItemsTotal > 0" :total="disabledItemsTotal" v-model:page="itemsDisabledQuery.pageNum" v-model:limit="itemsDisabledQuery.pageSize" @pagination="loadDisabledItems" />
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="itemsDisabledDialog = false">关 闭</el-button>
-        </div>
-      </template>
-    </el-dialog>
-
-    <!-- 新增/修改科目弹窗 -->
-    <el-dialog :title="itemDialog.title" v-model="itemDialog.visible" width="580px" append-to-body>
-      <el-form ref="itemFormRef" :model="itemForm" :rules="itemRules" label-width="80px">
-        <el-form-item label="预算表编号" prop="templateCode">
-          <el-input v-model="itemForm.templateCode" placeholder="如 01" />
-        </el-form-item>
-        <el-form-item label="科目编码" prop="itemCode">
-          <el-input v-model="itemForm.itemCode" placeholder="如 0101" />
-        </el-form-item>
-        <el-form-item label="科目名称" prop="itemName">
-          <el-input v-model="itemForm.itemName" placeholder="科目名称" />
-        </el-form-item>
-        <el-form-item label="上级科目编码" prop="parentCode">
-          <el-input v-model="itemForm.parentCode" placeholder="留空=一级科目" />
-        </el-form-item>
-        <el-form-item label="层级" prop="itemLevel">
-          <el-input-number v-model="itemForm.itemLevel" :min="1" :max="5" />
-        </el-form-item>
-        <el-form-item label="排序号" prop="itemOrder">
-          <el-input-number v-model="itemForm.itemOrder" :min="1" />
-        </el-form-item>
-        <el-form-item label="是否汇总行" prop="isSummary">
-          <el-select v-model="itemForm.isSummary">
-            <el-option label="否" :value="0" />
-            <el-option label="是" :value="1" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="是否可编辑" prop="isEditable">
-          <el-select v-model="itemForm.isEditable">
-            <el-option label="否" :value="0" />
-            <el-option label="是" :value="1" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="适用公司">
-          <el-select v-model="itemForm.orgScopeArr" multiple clearable filterable collapse-tags collapse-tags-tooltip placeholder="留空=全部公司" style="width: 100%">
-            <el-option v-for="c in companyOptions" :key="c.deptId" :label="c.deptName" :value="c.deptId" />
-          </el-select>
-          <div class="el-form-item__help" style="color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.4;">留空表示适用于全部公司；勾选后仅这些公司可见/填报该科目。</div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button :loading="buttonLoading" type="primary" @click="submitItemForm">确 定</el-button>
-        <el-button @click="itemDialog.visible = false">取 消</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 从科目库导入弹窗（勾选主数据科目 → 复制挂接到本方案） -->
-    <el-dialog title="从科目库导入科目" v-model="masterImportDialog.visible" width="620px" append-to-body>
-      <div class="items-search">
-        <el-input v-model="masterTreeFilter" placeholder="搜索科目编码/名称" clearable size="small" :prefix-icon="Search" />
-      </div>
-      <div class="items-tree-wrap master-import-tree" v-loading="masterImportLoading">
-        <el-tree
-          ref="masterTreeRef"
-          :data="masterTreeData"
-          node-key="id"
-          :props="{ children: 'children', label: 'itemName' }"
-          :filter-node-method="filterMasterNode"
-          :expand-on-click-node="false"
-          show-checkbox
-          highlight-current
-          class="items-tree-body"
-        >
-          <template #default="{ data }">
-            <span class="items-tree-node">
-              <span v-if="data.isTpl" class="items-tree-tpl">{{ data.itemName }}</span>
-              <span v-else-if="data.isAll" class="items-tree-tpl">全部科目</span>
-              <span v-else>{{ data.subjectCode ? data.subjectCode + ' ' : '' }}{{ data.subjectName }}</span>
-            </span>
-          </template>
-        </el-tree>
-      </div>
-      <template #footer>
-        <el-button :loading="masterImportLoading" type="primary" @click="doMasterImport">导入勾选科目</el-button>
-        <el-button @click="masterImportDialog.visible = false">取 消</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts" name="BudgetPlan">
-import { ref, reactive, computed, watch, nextTick, onMounted, getCurrentInstance } from 'vue';
-import { ElMessageBox } from 'element-plus';
-import { Search, Expand, Fold, Back, EditPen, View, Plus, Edit, Delete, RefreshLeft, InfoFilled, QuestionFilled, Lock, ArrowDown, Document, Top } from '@element-plus/icons-vue';
-import { listPlan, getPlan, addPlan, updatePlan, delPlan, changePlanStatus } from '@/api/budget/plan';
-import { listTemplateItem, listDisabledTemplateItem, restoreTemplateItem, getTemplateItem, addTemplateItem, updateTemplateItem, delTemplateItem, listTemplateItemCompanies, importFromMaster } from '@/api/budget/templateItem';
-import type { TemplateItemVO, BudgetCompany } from '@/api/budget/templateItem/types';
-import { querySubjectAll } from '@/api/budget/subject';
-import { listBudgetTemplate } from '@/api/budget/template';
+import { ref, reactive, nextTick, onMounted, getCurrentInstance } from 'vue';
+import { Search, Back, EditPen, View, Plus, Edit, Delete, InfoFilled, ArrowDown, RefreshLeft } from '@element-plus/icons-vue';
+import { listPlan, getPlan, addPlan, updatePlan, delPlan, changePlanStatus, listPlanCompanies, listMountedTemplates, listAvailableTemplates, mountPlanTemplates, unmountPlanTemplates, unarchivePlan, unvoidPlan, restorePlan } from '@/api/budget/plan';
+import type { BudgetCompany } from '@/api/budget/plan';
 
 const { proxy } = getCurrentInstance() as any;
 
@@ -421,141 +236,18 @@ const showSearch = ref(true);
 const total = ref(0);
 const readonly = ref(false);
 
-// ---- 概览统计（不依赖搜索条件，单独全量统计）----
-const planStats = reactive({ total: 0, draft: 0, published: 0, closed: 0 });
-const getStats = async () => {
-  try {
-    const res = await listPlan({ pageNum: 1, pageSize: 9999 });
-    const rows = res.rows || [];
-    planStats.total = rows.length;
-    planStats.draft = rows.filter((r: any) => r.status === 'DRAFT').length;
-    planStats.published = rows.filter((r: any) => r.status === 'PUBLISHED').length;
-    planStats.closed = rows.filter((r: any) => r.status === 'CLOSED').length;
-  } catch {
-    /* 统计失败不影响列表 */
-  }
-};
-
 // ---- 整页表单状态 ----
 const viewMode = ref<'list' | 'form'>('list');
 const pageTitle = ref('');
 const buttonLoading = ref(false);
 
 const basicSectionRef = ref<any>(null);
-const step3Locked = computed(() => !form.value.id);
-const scrollToBasic = () => {
-  basicSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-};
 
 // ---- 填报公司（transfer）----
 const companyOptions = ref<BudgetCompany[]>([]);
 const companyData = ref<any[]>([]);
 const fillOrgIds = ref<Array<string | number>>([]);
 
-// ---- 科目明细（勾选树）----
-const activeTab = ref<'base' | 'orgs' | 'items'>('base');
-const itemsLoading = ref(false);
-const itemsQuery = reactive({ planId: 0 });
-const itemsTreeData = ref<any[]>([]);
-const itemsTreeRef = ref<any>(null);
-const itemsTreeFilter = ref('');
-const defaultCheckedItems = ref<any[]>([]);
-const cascadeOn = ref(true);
-const selectedItemsNode = ref<any>(null);
-const canAddChild = computed(() => !!selectedItemsNode.value && !selectedItemsNode.value.isAll && !selectedItemsNode.value.isTemplate);
-const disabledTotal = computed(() => (disabledItemsTotal.value > 0 ? disabledItemsTotal.value : ''));
-const itemDialog = reactive({ visible: false, title: '' });
-const itemFormRef = ref<any>(null);
-const itemForm = ref<any>({});
-const itemRules = {
-  templateCode: [{ required: true, message: '预算表编号不能为空', trigger: 'blur' }],
-  itemCode: [{ required: true, message: '科目编码不能为空', trigger: 'blur' }],
-  itemName: [{ required: true, message: '科目名称不能为空', trigger: 'blur' }]
-};
-const itemsDisabledDialog = ref(false);
-const itemsDisabledLoading = ref(false);
-const disabledItemsList = ref<TemplateItemVO[]>([]);
-const disabledItemsTotal = ref(0);
-const itemsDisabledQuery = reactive({ planId: 0, pageNum: 1, pageSize: 10, templateCode: undefined as string | undefined, params: {} });
-
-// ---- 从科目库导入 ----
-const masterImportDialog = reactive({ visible: false });
-const masterImportLoading = ref(false);
-const masterTreeData = ref<any[]>([]);
-const masterTreeRef = ref<any>(null);
-const masterTreeFilter = ref('');
-
-const buildMasterTree = (rows: any[], tplNames?: Map<string, string>): any[] => {
-  const nodeMap = new Map<string, any>();
-  rows.forEach(r => nodeMap.set(String(r.subjectCode), { ...r, children: [] }));
-  const sortRec = (nodes: any[]) => {
-    nodes.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || String(a.subjectCode || a.templateCode || '').localeCompare(String(b.subjectCode || b.templateCode || '')));
-    nodes.forEach(n => sortRec(n.children || []));
-  };
-  const groups = new Map<string, any>();
-  rows.forEach(r => {
-    const node = nodeMap.get(String(r.subjectCode));
-    const parent = r.parentCode && nodeMap.has(String(r.parentCode)) ? nodeMap.get(String(r.parentCode)) : null;
-    if (parent) {
-      parent.children.push(node);
-      return;
-    }
-    const tpl = String(r.templateCode || 'ALL');
-    if (!groups.has(tpl)) {
-      const name = tplNames?.get(tpl);
-      groups.set(tpl, { id: 'mt-' + tpl, isTpl: true, templateCode: r.templateCode, itemName: tpl === 'ALL' ? '未分配预算表' : (name ? `${tpl} - ${name}` : '预算表 ' + tpl), children: [] });
-    }
-    groups.get(tpl).children.push(node);
-  });
-  const list = [...groups.values()].sort((a, b) => a.itemName.localeCompare(b.itemName));
-  list.forEach(g => sortRec(g.children as any[]));
-  return [{ id: 'm-all', isAll: true, itemName: '全部科目', children: list }];
-};
-
-const filterMasterNode = (value: string, data: any) => {
-  if (!value) return true;
-  if (data.isAll || data.isTpl) return true;
-  const hay = [data.subjectCode, data.subjectName, data.templateCode].filter(Boolean).join(' ').toLowerCase();
-  return hay.includes(String(value).toLowerCase());
-};
-
-watch(masterTreeFilter, v => masterTreeRef.value?.filter(v));
-
-const openMasterImport = async () => {
-  if (!form.value.id) return;
-  masterImportDialog.visible = true;
-  masterImportLoading.value = true;
-  masterTreeFilter.value = '';
-  try {
-    const [subjectRes, tplRes] = await Promise.all([querySubjectAll({ params: {} }), listBudgetTemplate()]);
-    const tplNames = new Map<string, string>();
-    (tplRes?.data ?? []).forEach((t: any) => t && t.templateCode && tplNames.set(String(t.templateCode), String(t.templateName || '')));
-    masterTreeData.value = buildMasterTree((subjectRes as any).data || [], tplNames);
-    await nextTick(() => masterTreeRef.value?.setCheckedKeys([]));
-  } finally {
-    masterImportLoading.value = false;
-  }
-};
-
-const doMasterImport = async () => {
-  if (!form.value.id) return;
-  const checked: any[] = (masterTreeRef.value?.getCheckedKeys() || []).concat(masterTreeRef.value?.getHalfCheckedKeys() || []);
-  const ids = checked.filter(k => Number.isFinite(Number(k))).map(Number);
-  if (!ids.length) {
-    proxy.$modal.msgInfo('请先勾选要导入的科目');
-    return;
-  }
-  masterImportLoading.value = true;
-  try {
-    const res = await importFromMaster({ planId: form.value.id, subjectIds: ids });
-    const n = (res as any)?.data ?? ids.length;
-    proxy.$modal.msgSuccess(`已导入 ${n} 个科目到本方案`);
-    masterImportDialog.visible = false;
-    await reloadItems();
-  } finally {
-    masterImportLoading.value = false;
-  }
-};
 
 const statusMap: Record<string, { type: string; label: string }> = {
   DRAFT: { type: 'info', label: '草稿' },
@@ -615,7 +307,6 @@ const getList = async () => {
   } finally {
     loading.value = false;
   }
-  getStats();
 };
 
 const handleQuery = () => {
@@ -637,7 +328,7 @@ const onDateChange = (field: string) => {
 // ================= 公司 =================
 const ensureCompanies = async () => {
   if (companyOptions.value.length) return;
-  const res = await listTemplateItemCompanies();
+  const res = await listPlanCompanies();
   companyOptions.value = res.data || [];
   companyData.value = companyOptions.value.map(c => ({ key: Number(c.deptId), label: c.deptName }));
 };
@@ -666,10 +357,58 @@ const orgFilter = (query: string, option: any) => {
   return String(option.label).toLowerCase().includes(String(query).toLowerCase());
 };
 
-// ================= 页面切换 =================
+// ---- 挂载模板（transfer）----
+const mountedTemplateKeys = ref<number[]>([]);
+const availableTemplateData = ref<any[]>([]);
+
+const tplFilter = (query: string, option: any) => {
+  return String(option.label).toLowerCase().includes(String(query).toLowerCase());
+};
+
+/** 加载方案已挂载的模板和可选模板 */
+const loadTemplates = async () => {
+  if (!form.value.id) {
+    mountedTemplateKeys.value = [];
+    availableTemplateData.value = [];
+    return;
+  }
+  const [mountedRes, availRes] = await Promise.all([
+    listMountedTemplates(form.value.id),
+    listAvailableTemplates(form.value.id)
+  ]);
+  const mounted = mountedRes.data || [];
+  const available = availRes.data || [];
+  mountedTemplateKeys.value = mounted.map((t: any) => t.id);
+  // 合并可选 + 已挂载，供 transfer 展示
+  const all = [...available, ...mounted];
+  const catMap: Record<string, string> = { BUSINESS: '经营预算', CAPITAL: '资本预算', SPECIAL: '专项预算' };
+  availableTemplateData.value = all.map((t: any) => ({
+    id: t.id,
+    label: `[${t.templateCode}] ${t.templateName}`,
+    category: catMap[t.category] || t.category
+  }));
+};
+
+/** transfer 变化时保存挂载关系 */
+const handleTemplateChange = async (value: number[]) => {
+  if (!form.value.id) return;
+  const currentSet = new Set(mountedTemplateKeys.value);
+  const newSet = new Set(value);
+  const toMount = value.filter(id => !currentSet.has(id));
+  const toUnmount = mountedTemplateKeys.value.filter(id => !newSet.has(id));
+  try {
+    if (toMount.length) await mountPlanTemplates(form.value.id, toMount);
+    if (toUnmount.length) await unmountPlanTemplates(form.value.id, toUnmount);
+    proxy.$modal.msgSuccess('模板挂载已更新');
+  } catch (e) {
+    // 回滚
+    await loadTemplates();
+  }
+};
+
+// ================= 页面切换 ================="
 const openForm = async () => {
   viewMode.value = 'form';
-  activeTab.value = 'base';
   await ensureCompanies();
 };
 
@@ -678,9 +417,8 @@ const handleAdd = async () => {
   pageTitle.value = '新增预算方案';
   form.value = { budgetYear: new Date().getFullYear() + 1, status: 'DRAFT' };
   fillOrgIds.value = [];
-  defaultCheckedItems.value = [];
-  itemsTreeData.value = [];
-  selectedItemsNode.value = null;
+  mountedTemplateKeys.value = [];
+  availableTemplateData.value = [];
   await openForm();
   await nextTick(() => proxy.$refs['planRef']?.clearValidate?.());
 };
@@ -689,9 +427,7 @@ const loadPlanForm = async (row: any) => {
   const res = await getPlan(row.id);
   form.value = res.data;
   fillOrgIds.value = parseOrgScope(form.value.orgScope);
-  defaultCheckedItems.value = [];
-  itemsTreeData.value = [];
-  selectedItemsNode.value = null;
+  await loadTemplates();
 };
 
 const handleUpdate = async (row: any) => {
@@ -699,7 +435,6 @@ const handleUpdate = async (row: any) => {
   pageTitle.value = '修改预算方案';
   await openForm();
   await loadPlanForm(row);
-  if (form.value.id) await reloadItems();
 };
 
 const handleView = async (row: any) => {
@@ -707,17 +442,11 @@ const handleView = async (row: any) => {
   pageTitle.value = '查看预算方案';
   await openForm();
   await loadPlanForm(row);
-  if (form.value.id) await reloadItems();
 };
 
 const backToList = () => {
   viewMode.value = 'list';
-  activeTab.value = 'base';
   readonly.value = false;
-  itemsTreeData.value = [];
-  itemsTreeFilter.value = '';
-  selectedItemsNode.value = null;
-  defaultCheckedItems.value = [];
   getList();
 };
 
@@ -726,19 +455,17 @@ const submitForm = () => {
     if (!valid) return;
     buttonLoading.value = true;
     try {
-      const payload = { ...form.value, orgScope: fillOrgIds.value.join(',') };
+      const payload = { ...form.value, orgScope: fillOrgIds.value.join(','), templateIds: mountedTemplateKeys.value };
       if (form.value.id) {
         await updatePlan(payload);
-        proxy.$modal.msgSuccess('已保存，正在同步科目选择…');
+        proxy.$modal.msgSuccess('保存成功');
+        backToList();
       } else {
         const res = await addPlan(payload);
         form.value.id = res?.data ?? payload.id;
-        proxy.$modal.msgSuccess('新增成功，可继续配置填报公司/科目明细');
+        proxy.$modal.msgSuccess('新增成功，可继续配置填报公司');
+        await loadTemplates();
       }
-      activeTab.value = 'orgs';
-      await saveSubjectSelection();
-      if (form.value.id) await reloadItems();
-      getList();
     } finally {
       buttonLoading.value = false;
     }
@@ -746,18 +473,6 @@ const submitForm = () => {
 };
 
 const handleStatus = (row: any, status: string) => {
-  if (status === 'PUBLISHED') {
-    const blocker = planList.value.find(p => p.budgetYear === row.budgetYear && p.status === 'PUBLISHED' && p.id !== row.id);
-    if (blocker) {
-      ElMessageBox.alert(
-        `该预算年度 ${row.budgetYear} 已存在执行中的方案「${blocker.planName}」。` +
-        `请先将它归档或作废，再发布当前方案「${row.planName}」。`,
-        '无法发布',
-        { type: 'warning', confirmButtonText: '知道了', closeOnClickModal: true }
-      );
-      return;
-    }
-  }
   const text = status === 'PUBLISHED'
     ? '发布后该方案进入执行中，操作不可逆，确认发布？'
     : '归档后该方案仅供查看，操作不可逆，确认归档？';
@@ -787,291 +502,6 @@ const handleDelete = (row: any) => {
   });
 };
 
-// ================= 科目明细 =================
-const buildFullTree = (rows: TemplateItemVO[]): any[] => {
-  const rootKey = (t: string, c: string) => t + '|' + c;
-  const nodeByCode = new Map<string, any>();
-  for (const r of rows) {
-    nodeByCode.set(rootKey(r.templateCode, r.itemCode), { ...r, children: [] });
-  }
-  const tplMap = new Map<string, any>();
-  for (const r of rows) {
-    const node = nodeByCode.get(rootKey(r.templateCode, r.itemCode));
-    const parent = r.parentCode ? nodeByCode.get(rootKey(r.templateCode, r.parentCode)) : undefined;
-    node._fullPath = parent ? `${parent._fullPath}/${r.itemName}` : r.itemName;
-    if (parent) {
-      parent.children.push(node);
-    } else {
-      const tplKey = r.templateCode || '';
-      let tpl = tplMap.get(tplKey);
-      if (!tpl) {
-        tpl = { id: 'tpl-' + tplKey, isTemplate: true, templateCode: tplKey, itemName: r.templateName || tplKey, children: [] };
-        tplMap.set(tplKey, tpl);
-      }
-      tpl.children.push(node);
-    }
-  }
-  const tpls = [...tplMap.values()].sort((a, b) => String(a.templateCode).localeCompare(String(b.templateCode)));
-  const sort = (nodes: any[]) => {
-    nodes.sort((a, b) => (a.itemOrder ?? 0) - (b.itemOrder ?? 0) || String(a.itemCode || '').localeCompare(String(b.itemCode || '')));
-    nodes.forEach(n => n.children?.length && sort(n.children));
-  };
-  tpls.forEach(t => sort(t.children as any[]));
-  return [{ id: 'all', isAll: true, itemName: '全部科目', children: tpls }];
-};
-
-const collectSubjectIds = (nodes: any[], acc: any[] = []): any[] => {
-  for (const n of nodes) {
-    if (n.isAll || n.isTemplate) {
-      collectSubjectIds(n.children || [], acc);
-    } else {
-      acc.push(n.id);
-    }
-  }
-  return acc;
-};
-
-const filterItemsNode = (value: string, data: any) => {
-  if (!value) return true;
-  if (data.isAll) return true;
-  const hay = [data.templateCode, data.itemCode, data.itemName].filter(Boolean).join(' ').toLowerCase();
-  return hay.includes(String(value).toLowerCase());
-};
-
-watch(itemsTreeFilter, v => itemsTreeRef.value?.filter(v));
-
-const onCascadeChange = () => {
-  if (!itemsTreeRef.value) return;
-  itemsTreeRef.value.setCheckedKeys(collectSubjectIds(itemsTreeData.value));
-  expandAllItems();
-};
-
-const onItemsNodeClick = (data: any) => {
-  selectedItemsNode.value = data.isAll ? null : data;
-};
-
-const syncingItems = ref(false);
-
-/** 收集某节点子树下的全部真实科目 id */
-const subjectIdsIn = (node: any, acc: any[] = []): any[] => {
-  if (!node.isAll && !node.isTemplate) acc.push(node.id);
-  (node.children || []).forEach(c => subjectIdsIn(c, acc));
-  return acc;
-};
-
-const hasCheckedDesc = (node: any, tree: any): boolean => {
-  return (node.children || []).some(c => {
-    const st = tree.getNode(c.id);
-    return st && st.checked;
-  });
-};
-
-/** 保存时应停用的科目 id 集合（当前未勾选，且按其勾选差异停用） */
-const collectUncheckToStop = (nodes: any[], tree: any, out: Set<any> = new Set()): any[] => {
-  for (const n of nodes) {
-    if (n.isAll || n.isTemplate) {
-      collectUncheckToStop(n.children || [], tree, out);
-      continue;
-    }
-    const st = tree?.getNode ? tree.getNode(n.id) : undefined;
-    if (!st) {
-      collectUncheckToStop(n.children || [], tree, out);
-      continue;
-    }
-    if (!st.checked) {
-      if (hasCheckedDesc(n, tree)) {
-        // 部分子分支仍勾选（严格模式）：仅停用其下未勾选部分
-        collectUncheckToStop(n.children || [], tree, out);
-      } else {
-        // 整棵子树未勾选：整棵停用
-        subjectIdsIn(n).forEach(id => out.add(id));
-      }
-    } else {
-      collectUncheckToStop(n.children || [], tree, out);
-    }
-  }
-  return [...out];
-};
-
-/** 保存时按勾选差异停用未勾选科目（与权限树"勾选确定后生效"一致） */
-const saveSubjectSelection = async () => {
-  if (readonly.value || !form.value.id) return;
-  if (!itemsTreeRef.value || !itemsTreeData.value.length) return;
-  const toStop = collectUncheckToStop(itemsTreeData.value, itemsTreeRef.value);
-  if (!toStop.length) return;
-  await proxy.$modal.confirm(`有 ${toStop.length} 个科目未勾选，保存后将停用这些科目，确认继续？`, '科目选择确认');
-  syncingItems.value = true;
-  try {
-    await delTemplateItem(toStop);
-  } finally {
-    syncingItems.value = false;
-  }
-};
-
-const expandAllItems = () => itemsTreeData.value.forEach(n => itemsTreeRef.value?.store.setExpanded(n, true));
-const collapseAllItems = () => itemsTreeData.value.forEach(n => itemsTreeRef.value?.store.setExpanded(n, false));
-
-/** 全不选 = 停用方案全部科目 */
-const itemsUncheckAll = () => {
-  proxy.$modal.confirm('确定停用本方案的全部科目？', '全不选确认').then(async () => {
-    const ids = collectSubjectIds(itemsTreeData.value);
-    syncingItems.value = true;
-    try {
-      for (const id of ids) {
-        await delTemplateItem(id);
-      }
-      proxy.$modal.msgSuccess('已停用全部科目');
-    } finally {
-      syncingItems.value = false;
-      await reloadItems();
-    }
-  });
-};
-
-/** 全选 = 还原本方案全部已停用科目 */
-const itemsCheckAll = async () => {
-  const res = await listDisabledTemplateItem({ planId: form.value.id, pageNum: 1, pageSize: 9999 });
-  const ids = (res.rows || []).map((r: any) => r.id);
-  if (!ids.length) {
-    proxy.$modal.msgInfo('暂无已停用科目');
-    return;
-  }
-  syncingItems.value = true;
-  try {
-    await restoreTemplateItem(ids);
-    proxy.$modal.msgSuccess('已还原全部科目');
-  } finally {
-    syncingItems.value = false;
-    await reloadItems();
-  }
-};
-
-const reloadItems = async () => {
-  if (!form.value.id) return;
-  itemsLoading.value = true;
-  itemsQuery.planId = form.value.id;
-  const res = await listTemplateItem({ ...itemsQuery, pageNum: 1, pageSize: 9999 });
-  itemsTreeData.value = buildFullTree(res.rows || []);
-  const keep = selectedItemsNode.value;
-  if (keep && keep.id !== 'all') {
-    const again = findAnyNode(itemsTreeData.value, keep.id);
-    selectedItemsNode.value = again || null;
-  }
-  defaultCheckedItems.value = collectSubjectIds(itemsTreeData.value);
-  itemsLoading.value = false;
-  await nextTick(() => {
-    itemsTreeRef.value?.setCheckedKeys(defaultCheckedItems.value);
-  });
-};
-
-const findAnyNode = (nodes: any[], id: any): any => {
-  for (const n of nodes) {
-    if (String(n.id) === String(id)) return n;
-    const hit = findAnyNode(n.children || [], id);
-    if (hit) return hit;
-  }
-  return undefined;
-};
-
-const onTabChange = (name: string | number) => {
-  if (name === 'items' && form.value.id) {
-    reloadItems();
-  }
-};
-
-// ---- 子科目编辑（新增/停用/还原复用原逻辑） ----
-const handleAddChildItem = () => handleAddChildItemBy(selectedItemsNode.value);
-const handleAddChildItemBy = (node: any) => {
-  if (!node || node.isAll) return;
-  let templateCode: string | undefined;
-  let templateName: string | undefined;
-  let parentCode: string | undefined;
-  let itemLevel = 1;
-  if (node.isTemplate) {
-    templateCode = node.templateCode;
-    templateName = node.itemName;
-    parentCode = undefined;
-    itemLevel = 1;
-  } else {
-    templateCode = node.templateCode;
-    templateName = node.templateName;
-    parentCode = node.itemCode;
-    itemLevel = (node.itemLevel ?? 0) + 1;
-  }
-  itemForm.value = {
-    planId: form.value.id,
-    templateCode,
-    templateName,
-    parentCode,
-    itemCode: undefined,
-    itemName: undefined,
-    itemLevel,
-    itemOrder: 1,
-    isSummary: 0,
-    isEditable: 1,
-    responsibleDept: undefined,
-    formula: undefined
-  };
-  itemDialog.visible = true;
-  itemDialog.title = '新增子科目';
-};
-
-const openItemsDisabled = () => {
-  itemsDisabledQuery.planId = form.value.id;
-  itemsDisabledQuery.pageNum = 1;
-  itemsDisabledDialog.value = true;
-  loadDisabledItems();
-};
-
-const loadDisabledItems = async () => {
-  itemsDisabledLoading.value = true;
-  const res = await listDisabledTemplateItem(itemsDisabledQuery);
-  disabledItemsList.value = res.rows || [];
-  disabledItemsTotal.value = res.total || 0;
-  itemsDisabledLoading.value = false;
-};
-
-const doRestoreItem = async (row: TemplateItemVO) => {
-  await proxy.$modal.confirm(`确认还原科目"${row.itemName}"？还原后将重新生效。`);
-  await restoreTemplateItem([row.id]);
-  proxy.$modal.msgSuccess('还原成功');
-  await loadDisabledItems();
-  await reloadItems();
-};
-
-const handleUpdateItem = async (row: TemplateItemVO) => {
-  const res = await getTemplateItem(row.id);
-  itemForm.value = { ...res.data, planId: form.value.id };
-  itemDialog.visible = true;
-  itemDialog.title = '修改科目';
-};
-
-const handleStopItem = async (row: TemplateItemVO) => {
-  await proxy.$modal.confirm(`是否停用科目"${row.itemName}"？停用后可在"已停用"中还原。`);
-  await delTemplateItem(row.id);
-  proxy.$modal.msgSuccess('停用成功');
-  await reloadItems();
-};
-
-const submitItemForm = () => {
-  itemFormRef.value?.validate(async (valid: boolean) => {
-    if (!valid) return;
-    itemForm.value.planId = form.value.id;
-    buttonLoading.value = true;
-    try {
-      if (itemForm.value.id) {
-        await updateTemplateItem(itemForm.value);
-      } else {
-        await addTemplateItem(itemForm.value);
-      }
-      proxy.$modal.msgSuccess('保存成功');
-      itemDialog.visible = false;
-      await reloadItems();
-    } finally {
-      buttonLoading.value = false;
-    }
-  });
-};
 
 onMounted(async () => {
   await ensureCompanies();
@@ -1080,49 +510,6 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
-/* ---------- 概览统计卡片 ---------- */
-.plan-stats {
-  margin-bottom: 16px;
-}
-.stat-card {
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  .stat-lbl {
-    font-size: 12px;
-    color: var(--el-text-color-secondary);
-    opacity: 0.85;
-  }
-  .stat-val {
-    font-size: 22px;
-    font-weight: 700;
-    margin-top: 4px;
-    color: var(--el-text-color-primary);
-  }
-}
-.stat-card.stat-primary {
-  background: linear-gradient(135deg, #6c5ce7, #7a6ff0);
-  border-color: transparent;
-  .stat-lbl {
-    color: #fff;
-    opacity: 0.85;
-  }
-  .stat-val {
-    color: #fff;
-  }
-}
-.stat-card .stat-val.stat-draft {
-  color: var(--el-color-warning);
-}
-.stat-card .stat-val.stat-ok {
-  color: var(--el-color-success);
-}
-.stat-card .stat-val.stat-off {
-  color: var(--el-color-danger);
-}
-
 /* ---------- 整页表单 ---------- */
 .plan-page {
   display: flex;
@@ -1202,38 +589,6 @@ onMounted(async () => {
   font-size: 14px;
 }
 
-.items-lock {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 28px 16px;
-  text-align: center;
-  background: var(--el-fill-color-lighter);
-  border: 1px dashed var(--el-border-color);
-  border-radius: var(--el-border-radius-base);
-}
-
-.items-lock-icon {
-  color: var(--el-text-color-placeholder);
-}
-
-.items-lock-text {
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--el-text-color-secondary);
-}
-
-.items-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 24px 16px;
-  text-align: center;
-  background: var(--el-fill-color-lighter);
-  border-radius: var(--el-border-radius-base);
-}
 
 .plan-base-form {
   max-width: 780px;
@@ -1271,70 +626,34 @@ onMounted(async () => {
   width: 46%;
 }
 
-/* ---------- 科目明细（勾选树） ---------- */
-.items-toolbar {
+/* ---------- 挂载模板 ---------- */
+.plan-section-desc {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.tpl-lock {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.items-toolbar-left,
-.items-toolbar-right {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
-}
-
-.items-hint-icon {
-  color: var(--el-text-color-placeholder);
-  cursor: help;
-}
-
-.items-search {
-  margin-bottom: 8px;
-}
-
-.items-tree-wrap {
-  border: 1px solid var(--el-border-color-lighter);
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  padding: 24px;
+  background: var(--el-fill-color-lighter);
   border-radius: 4px;
-  height: calc(100vh - 330px);
-  min-height: 380px;
-  overflow: auto;
-  padding: 8px;
 }
 
-.items-tree-body {
+.tpl-lock-icon {
+  color: var(--el-color-primary);
+  font-size: 16px;
+}
+
+.tpl-transfer {
   width: 100%;
 }
 
-.items-tree-node {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-.items-tree-tpl {
-  color: var(--el-text-color-secondary);
-}
-
-.items-node-tag {
-  font-size: 11px;
-  line-height: 1;
-}
-
-.items-node-ops {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.items-tree-body :deep(.el-tree-node__content:hover) .items-node-ops {
-  opacity: 1;
+.tpl-transfer :deep(.el-transfer-panel) {
+  width: 46%;
 }
 </style>

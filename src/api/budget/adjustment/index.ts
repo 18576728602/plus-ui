@@ -73,7 +73,7 @@ export function listDept() {
 /** 查询模板科目列表(按预算表编号) */
 export function listTemplateItems(templateCode: string) {
   return request({
-    url: '/budget/templateItem/list',
+    url: '/budget/template/itemsByCode',
     method: 'get',
     params: { templateCode }
   });
@@ -82,7 +82,7 @@ export function listTemplateItems(templateCode: string) {
 /** 查询全部模板科目(用于动态生成预算表/科目下拉) */
 export function listAllTemplateItems() {
   return request({
-    url: '/budget/templateItem/list',
+    url: '/budget/template/itemsByCode',
     method: 'get'
   });
 }

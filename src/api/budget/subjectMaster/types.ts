@@ -23,12 +23,18 @@ export interface SubjectMasterVO {
   rowType?: 'HEAD' | 'ITEM' | 'SUM' | 'REF';
   /** 业务分类编码(引用 budget_category.category_code,如 01=公司基本信息/02=营业收入；空=未分类) */
   categoryCode?: string;
-  /** 小数位:CURRENCY/PERCENT可配(0-6,默认2),NUMBER固定0(整数/人数类禁小数),TEXT不适用 */
-  decimalPlaces?: number;
+  /** 集团归集科目编码(DEPT必填,指向SYS集团共享科目;SYS为空) */
+  gatherSubjectCode?: string;
+  /** 编制说明 */
+  remark?: string;
   /** 分类分组虚拟节点标记(方案A：分类独立成 budget_category 表，树顶层为分类分组节点，其下平铺明细) */
   _isCategory?: boolean;
   /** 创建时间(用于科目明细页按创建先后排序) */
   createTime?: string | number | Date;
+  /** 创建人ID */
+  createBy?: number;
+  /** 创建人登录名(后端关联用户表回填) */
+  createByName?: string;
   /** 分类分组节点名称(仅 _isCategory=true 时有效，来自 budget_category.category_name) */
   categoryName?: string;
   /** 树形子节点(前端组装树时填充) */
@@ -52,18 +58,10 @@ export interface SubjectMasterForm {
   rowType?: 'HEAD' | 'ITEM' | 'SUM' | 'REF';
   /** 业务分类编码 */
   categoryCode?: string;
-  /** 数据类型: CURRENCY=货币金额/NUMBER=普通数字/PERCENT=百分比/TEXT=文本 */
-  dataType?: 'CURRENCY' | 'NUMBER' | 'PERCENT' | 'TEXT';
-  /** 计量单位(如 元/万元/人/%) */
-  unit?: string;
-  /** 是否参与汇总取数 */
-  participateSummary?: boolean;
-  /** 是否必填(完整性校验) */
-  requiredFlag?: boolean;
-  /** 是否计算项(公式科目) */
-  isFormula?: boolean;
-  /** 小数位:CURRENCY/PERCENT可配(0-6,默认2),NUMBER固定0(整数/人数类禁小数),TEXT不适用 */
-  decimalPlaces?: number;
+  /** 集团归集科目编码(DEPT必填,指向SYS集团共享科目) */
+  gatherSubjectCode?: string;
+  /** 编制说明 */
+  remark?: string;
 }
 
 export interface SubjectMasterQuery {
@@ -77,6 +75,8 @@ export interface SubjectMasterQuery {
   keepHead?: boolean;
   /** 方案A：是否按分类分组生成树(科目明细页=true，树顶层为分类分组节点；挂载页默认 false) */
   groupByCategory?: boolean;
+  /** 行类型过滤: 单值(HEAD/ITEM/SUM/REF)或逗号分隔多值(如 ITEM,SUM,REF 排除分类) */
+  rowType?: string;
   templateCode?: string;
   budgetYear?: number;
   templateId?: number;

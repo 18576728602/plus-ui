@@ -5,15 +5,13 @@ export interface BudgetTemplateType {
   id?: number;
   templateCode?: string;
   templateName?: string;
-  sortOrder?: number;
   status?: string;
   createBy?: string;
   createTime?: string;
+  updateTime?: string;
   budgetYear?: number;
   subjectCount?: number;
   templateId?: number;
-  /** 表类型: BASE=基础表/TEXT=文本表/SPECIAL=特种表 */
-  templateType?: string;
   /** 表说明(用途) */
   remark?: string;
   /** 实际完成列名(画布表头) */
@@ -22,6 +20,18 @@ export interface BudgetTemplateType {
   budgetLabel?: string;
   /** 复制目标年份（复制接口使用） */
   targetYear?: number;
+  /** 分类:BUSINESS=经营预算/CAPITAL=资本预算/SPECIAL=专项预算 */
+  category?: string;
+  /** 预算表张数（工作表数量） */
+  budgetTableCount?: number;
+  /** 字段数（挂载科目数） */
+  fieldCount?: number;
+  /** 是否被已发布方案挂载（锁定） */
+  locked?: boolean;
+  /** 负责人名称 */
+  ownerName?: string;
+  /** 画布设计 JSON（Univer 工作簿快照，对应后端 design_json 字段） */
+  designJson?: any;
 }
 
 /**
@@ -35,18 +45,48 @@ export const nextBudgetTemplateCode = (): AxiosPromise<string> => {
 };
 
 /**
- * 查询预算表模板列表，可按年度过滤（同一编码可存在多个年度版本）
+ * 查询预算模板列表，可按年度过滤（同一编码可存在多个年度版本）
  */
-export const listBudgetTemplate = (budgetYear?: number): AxiosPromise<BudgetTemplateType[]> => {
+export interface TemplateQuery {
+  keyword?: string;
+  category?: string;
+  status?: string;
+  budgetYear?: number;
+  pageNum?: number;
+  pageSize?: number;
+  /** 排序字段(prop): templateCode/templateName/budgetYear/category/status/createTime/ownerName */
+  orderByColumn?: string;
+  /** 排序方向: ascending/descending */
+  isAsc?: string;
+}
+export const listBudgetTemplate = (query?: TemplateQuery): AxiosPromise<any> => {
   return request({
     url: '/budget/template/list',
     method: 'get',
-    params: budgetYear ? { budgetYear } : undefined
+    params: query || {}
+  });
+};
+
+/** 分类Tab统计 */
+export const getTemplateStats = (): AxiosPromise<Record<string, number>> => {
+  return request({
+    url: '/budget/template/stats',
+    method: 'get'
   });
 };
 
 /**
- * 新增预算表模板
+ * 获取单个预算模板完整数据（含 designJson，list 接口不返回此大字段）
+ */
+export const getBudgetTemplateById = (id: number): AxiosPromise<BudgetTemplateType> => {
+  return request({
+    url: `/budget/template/${id}`,
+    method: 'get'
+  });
+};
+
+/**
+ * 新增预算模板
  */
 export const addBudgetTemplate = (data: BudgetTemplateType) => {
   return request({
@@ -57,7 +97,7 @@ export const addBudgetTemplate = (data: BudgetTemplateType) => {
 };
 
 /**
- * 修改预算表模板
+ * 修改预算模板
  */
 export const updateBudgetTemplate = (data: BudgetTemplateType) => {
   return request({
@@ -68,7 +108,7 @@ export const updateBudgetTemplate = (data: BudgetTemplateType) => {
 };
 
 /**
- * 删除预算表模板（按 id）
+ * 删除预算模板（按 id）
  */
 export const delBudgetTemplate = (id: number) => {
   return request({

@@ -73,12 +73,13 @@ export const delSubject = (id: string | number | Array<string | number>) => {
 };
 
 /**
- * 查询预算表模板列表(含编码+名称,用于所属预算表下拉)
+ * 查询预算模板列表(含编码+名称,用于所属预算表下拉)
  */
 export const listBudgetTemplate = (): AxiosPromise<{ templateCode: string; templateName: string }[]> => {
   return request({
     url: '/budget/template/list',
-    method: 'get'
+    method: 'get',
+    params: { pageNum: 1, pageSize: 999 }
   });
 };
 

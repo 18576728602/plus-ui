@@ -31,7 +31,16 @@ export const pageByFinish = (query: FlowInstanceQuery): AxiosPromise<FlowInstanc
 /**
  * 通过业务id获取历史流程图
  */
-export const flowHisTaskList = (businessId: string | number) => {
+
+/**
+ * 获取流程记录（填报端专用，无权限校验）
+ */
+export const flowHisTaskListForFill = (businessId: string | number) => {
+  return request({
+    url: `/workflow/instance/flowHisTaskListForFill/${businessId}` + '?t' + Math.random(),
+    method: 'get'
+  });
+};export const flowHisTaskList = (businessId: string | number) => {
   return request({
     url: `/workflow/instance/flowHisTaskList/${businessId}` + '?t' + Math.random(),
     method: 'get'

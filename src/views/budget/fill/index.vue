@@ -13,7 +13,7 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="showDeptSelect" label="填报单位">
+        <el-form-item v-if="showDeptSelect && !isApprovalView" label="填报单位">
           <el-select v-model="deptId" placeholder="请选择填报单位" style="width: 200px" @change="handleDeptChange">
             <el-option v-for="item in deptOptions" :key="item.deptId" :label="item.deptName" :value="item.deptId" />
           </el-select>
@@ -34,6 +34,29 @@
 
     <!-- 填报区域：折叠面板 -->
     <div v-else-if="planId && (deptId || !showDeptSelect)">
+      <!-- 两上两下流程步骤条 -->
+      <el-card class="mb-4 fill-round-card" shadow="never">
+        <div class="fill-round-bar">
+          <el-steps :active="stepActive" finish-status="success" align-center simple class="fill-steps">
+            <el-step v-for="s in roundSteps" :key="s.title" :title="s.title" />
+          </el-steps>
+          <div class="fill-round-meta">
+            <span class="fill-round-no">第 {{ currentRound }} 轮</span>
+            <el-tag :type="fillStatusType" size="small" effect="dark">{{ fillStatusText }}</el-tag>
+          </div>
+        </div>
+        <!-- 退回原因提示：按板块分别显示 -->
+        <el-alert
+          v-for="item in rejectRemarks"
+          :key="item.code"
+          :title="`【${item.name}】${item.remark}`"
+          type="error"
+          show-icon
+          :closable="false"
+          class="mb-2"
+        />
+      </el-card>
+
       <el-row :gutter="0">
         <!-- 左侧：板块导航 -->
         <el-col :span="3">
@@ -58,16 +81,6 @@
         <!-- 右侧：填报表格 -->
         <el-col :span="21">
           <el-card shadow="never">
-            <!-- 驳回原因提示：按板块分别显示 -->
-            <el-alert
-              v-for="item in rejectRemarks"
-              :key="item.code"
-              :title="`【${item.name}】${item.remark}`"
-              type="error"
-              show-icon
-              :closable="false"
-              class="mb-2"
-            />
             <template #header>
               <div class="flex justify-between items-center">
                 <span class="font-bold">预算填报 - {{ currentDeptName }}</span>
@@ -93,14 +106,27 @@
                   <template v-else-if="hasSubmitted && !hasDraftData">
                     <el-tag type="warning" size="large" class="mr-2">已提交，待审批</el-tag>
                   </template>
-                  <!-- 有草稿数据（含驳回）且方案非归档/关闭：可以编辑和提交 -->
-                  <template v-if="hasDraftData && !readonly">
+                  <!-- 有草稿数据（含驳回）且方案非归档/关闭：可以编辑和提交（审批/查看模式不展示） -->
+                  <template v-if="hasDraftData && !readonly && !isApprovalView">
                     <el-button type="success" icon="Check" @click="handleSubmit" :loading="submitLoading">
-                      提交审批
+                      {{ currentRound >= 2 ? '修订后提交' : '提交审批' }}
                     </el-button>
                     <el-button type="primary" icon="Document" @click="handleSaveDraft" :loading="saveLoading">
                       保存草稿
                     </el-button>
+                  </template>
+                  <!-- 审批模式：显示审批通过/驳回按钮 -->
+                  <template v-if="isApprovalView">
+                    <el-input
+                      v-model="approvalMessage"
+                      type="textarea"
+                      :rows="2"
+                      placeholder="审批意见（可选）"
+                      class="mr-2"
+                      style="width: 280px; display: inline-block;"
+                    />
+                    <el-button type="success" icon="Check" @click="handleApprove" :loading="approvalLoading">审批通过</el-button>
+                    <el-button type="danger" icon="Close" @click="handleReject" :loading="approvalLoading">驳回</el-button>
                   </template>
                 </div>
               </div>
@@ -173,16 +199,6 @@
                       <span v-else>{{ row.remark || '-' }}</span>
                     </template>
                   </el-table-column>
-
-                  <el-table-column label="状态" width="90" align="center">
-                    <template #default="{ row }">
-                      <el-tag v-if="row.id && row.isSummary !== 1" :type="getStatusType(row.status)" size="small">
-                        {{ getStatusLabel(row.status) }}
-                      </el-tag>
-                      <span v-else-if="row.isSummary === 1">-</span>
-                      <span v-else>-</span>
-                    </template>
-                  </el-table-column>
                 </el-table>
                 <!-- 01板块独立保存按钮（不参与审批流程，随时可保存） -->
                 <div v-if="section.expanded && section.code === '01'" class="mt-2">
@@ -202,7 +218,7 @@
                   style="width: 100%"
                   :max-height="600"
                 >
-                  <el-table-column label="预算项目" min-width="300">
+                  <el-table-column :label="section.subjectLabel || '预算项目'" min-width="300">
                     <template #default="{ row }">
                       <span :style="{ paddingLeft: (row.itemLevel - 1) * 16 + 'px', fontWeight: row.isSummary === 1 || row._isGroupHeader ? 'bold' : 'normal' }">
                         {{ row.itemName }}
@@ -210,42 +226,74 @@
                     </template>
                   </el-table-column>
 
-                  <el-table-column label="上年实际(万元)" width="170" align="center">
+                  <!-- 上年实际列：TEXT 行展示上年实际文本，数值行按设计格式展示/录入 -->
+                  <el-table-column :label="section.actualLabel || '上年实际(万元)'" width="170" align="center">
                     <template #default="{ row }">
-                      <el-input-number
-                        v-if="row.isEditable === 1 && !readonly && !isRowLocked(row)"
-                        v-model="row.lastActual"
-                        :precision="2"
-                        :controls="false"
-                        size="small"
-                        style="width: 130px"
-                        @change="onFillInput(row, section)"
-                      />
-                      <span v-else>{{ displayValue(row, 'lastActual') != null ? formatAmount(displayValue(row, 'lastActual')) : '-' }}</span>
-                    </template>
-                  </el-table-column>
-
-                  <el-table-column label="本年预算(万元)" width="210" align="center">
-                    <template #default="{ row }">
-                      <div class="prefill-cell" :class="{ 'is-prefilled': row._prefilled }">
+                      <template v-if="row.inputType === 'TEXT' || row.inputType === 'SELECT'">
+                        <span>{{ row.lastActualText || '-' }}</span>
+                      </template>
+                      <template v-else>
                         <el-input-number
-                          v-if="row.isEditable === 1 && !readonly && !isRowLocked(row) && !isFieldReadOnly(row)"
-                          v-model="row.budgetAmount"
-                          :precision="2"
+                          v-if="row.isEditable === 1 && !readonly && !isRowLocked(row)"
+                          v-model="row.lastActual"
+                          :precision="row.decimals != null ? row.decimals : 2"
                           :controls="false"
                           size="small"
                           style="width: 130px"
                           @change="onFillInput(row, section)"
                         />
-                        <span v-else>{{ displayValue(row, 'budgetAmount') != null ? formatAmount(displayValue(row, 'budgetAmount')) : '-' }}</span>
-                        <el-tooltip v-if="row._prefilled && row.isEditable === 1 && !row.isSummary" content="采纳该预填值" placement="top">
-                          <el-button size="small" type="success" circle text icon="Check" class="prefill-accept" @click="acceptPrefill(row)" />
-                        </el-tooltip>
-                      </div>
+                        <span v-else>{{ displayValue(row, 'lastActual') != null ? formatAmount(displayValue(row, 'lastActual')) : '-' }}</span>
+                      </template>
                     </template>
                   </el-table-column>
 
-                  <el-table-column label="增减额" width="150" align="center">
+                  <!-- 本年预算列：TEXT/SELECT 行文本输入（SELECT 用下拉），数值行按设计格式录入 -->
+                  <el-table-column :label="section.budgetLabel || '本年预算(万元)'" width="210" align="center">
+                    <template #default="{ row }">
+                      <template v-if="row.inputType === 'TEXT' || row.inputType === 'SELECT'">
+                        <el-select
+                          v-if="row.inputType === 'SELECT' && row.options?.length && row.isEditable === 1 && !readonly && !isRowLocked(row) && !isFieldReadOnly(row)"
+                          v-model="row.remark"
+                          size="small"
+                          placeholder="请选择"
+                          style="width: 130px"
+                          clearable
+                          @change="onTextInput(row)"
+                        >
+                          <el-option v-for="o in row.options" :key="o" :label="o" :value="o" />
+                        </el-select>
+                        <el-input
+                          v-else-if="row.isEditable === 1 && !readonly && !isRowLocked(row) && !isFieldReadOnly(row)"
+                          v-model="row.remark"
+                          size="small"
+                          placeholder="请输入"
+                          style="width: 130px"
+                          @input="onTextInput(row)"
+                        />
+                        <span v-else>{{ row.remark || '-' }}</span>
+                      </template>
+                      <template v-else>
+                        <div class="prefill-cell" :class="{ 'is-prefilled': row._prefilled }">
+                          <el-input-number
+                            v-if="row.isEditable === 1 && !readonly && !isRowLocked(row) && !isFieldReadOnly(row)"
+                            v-model="row.budgetAmount"
+                            :precision="row.decimals != null ? row.decimals : 2"
+                            :controls="false"
+                            size="small"
+                            style="width: 130px"
+                            @change="onFillInput(row, section)"
+                          />
+                          <span v-else>{{ displayValue(row, 'budgetAmount') != null ? formatAmount(displayValue(row, 'budgetAmount')) : '-' }}</span>
+                          <el-tooltip v-if="row._prefilled && row.isEditable === 1 && !row.isSummary" content="采纳该预填值" placement="top">
+                            <el-button size="small" type="success" circle text icon="Check" class="prefill-accept" @click="acceptPrefill(row)" />
+                          </el-tooltip>
+                        </div>
+                      </template>
+                    </template>
+                  </el-table-column>
+
+                  <!-- 增减额列：模板设计器开启后展示（自动计算，只读） -->
+                  <el-table-column v-if="section.showDiff" :label="section.diffLabel || '增减额'" width="150" align="center">
                     <template #default="{ row }">
                       <span :class="getDiffClass(row)" class="diff-cell">
                         {{ formatDiff(row) }}
@@ -255,23 +303,14 @@
                     </template>
                   </el-table-column>
 
-                  <el-table-column label="增减率" width="120" align="center">
+                  <!-- 增减率列：模板设计器开启后展示（自动计算，只读） -->
+                  <el-table-column v-if="section.showDiffRate" :label="section.diffRateLabel || '增减率'" width="120" align="center">
                     <template #default="{ row }">
                       <span :class="getDiffClass(row)" class="diff-cell">
                         {{ formatDiffRate(row) }}
                         <span v-if="diffDirection(row) === 'up'" class="trend-badge up"><svg viewBox="0 0 24 24" width="9" height="9"><path d="M12 6l7 10H5z" fill="#fff"/></svg></span>
                         <span v-else-if="diffDirection(row) === 'down'" class="trend-badge down"><svg viewBox="0 0 24 24" width="9" height="9"><path d="M12 18L5 8h14z" fill="#fff"/></svg></span>
                       </span>
-                    </template>
-                  </el-table-column>
-
-                  <el-table-column label="状态" width="90" align="center">
-                    <template #default="{ row }">
-                      <el-tag v-if="row.id && row.isSummary !== 1" :type="getStatusType(row.status)" size="small">
-                        {{ getStatusLabel(row.status) }}
-                      </el-tag>
-                      <span v-else-if="row.isSummary === 1">-</span>
-                      <span v-else>-</span>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -496,26 +535,71 @@
         <el-button size="small" type="primary" @click="doPrefill" :loading="prefillLoading">执行预填</el-button>
       </template>
     </el-dialog>
+
+    <!-- 提交确认：支持填报员填写提交说明（备注），随提交一并进入审批 -->
+    <el-dialog v-model="submitDialog" width="560px" top="24vh" :close-on-click-modal="false">
+      <template #header>
+        <span>提交确认</span>
+        <el-tooltip content="提交后数据将进入审批流程，确认提交？" placement="top">
+          <el-icon style="margin-left: 6px; color: #e6a23c; font-size: 16px; cursor: pointer; vertical-align: middle;"><WarningFilled /></el-icon>
+        </el-tooltip>
+      </template>
+      <el-form label-width="88px">
+        <el-form-item label="提交说明">
+          <el-input
+            v-model="submitReasonTemp"
+            type="textarea"
+            :rows="3"
+            maxlength="300"
+            show-word-limit
+            placeholder="可填写本期预算编制说明、特殊事项等（选填），审批人可见"
+          />
+        </el-form-item>
+        <el-form-item label="上传附件">
+          <div class="w-full">
+            <el-upload :http-request="uploadSubmitFile" :show-file-list="false" multiple class="mr-2 d-inline-block">
+              <el-button size="small">+ 选择文件</el-button>
+            </el-upload>
+            <div v-if="submitFiles.length" class="mt-2" style="display:flex; flex-wrap:wrap; gap:6px;">
+              <el-tag v-for="f in submitFiles" :key="f.url" closable @close="removeSubmitFile(f.url)">
+                <a :href="f.url" target="_blank" style="text-decoration:none; color:inherit;">{{ f.name }}</a>
+              </el-tag>
+            </div>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="submitDialog = false">取消</el-button>
+        <el-button size="small" type="primary" icon="Check" :loading="submitLoading" @click="confirmSubmit">确认提交</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts" name="BudgetFill">
 import { ref, computed, onMounted, onActivated, nextTick } from 'vue';
+import { useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Loading, ArrowDown, ArrowRight, Check, User, ChatLineRound } from '@element-plus/icons-vue';
+import { Loading, ArrowDown, ArrowRight, Check, User, ChatLineRound, WarningFilled } from '@element-plus/icons-vue';
 import { getAllFillData, saveDraft, submitFill, listPlan, listDept, getMyUnit } from '@/api/budget/fill';
 import { listApprovalComments, replyApprovalComment } from '@/api/budget/approvalComment';
 import { listDataVersions, compareDataVersions, restoreDataVersion } from '@/api/budget/dataVersion';
 import { getMyTargets } from '@/api/budget/target';
 import { validateFill } from '@/api/budget/validate';
+import { completeTask, backProcess } from '@/api/workflow/task';
+import { flowHisTaskListForFill } from '@/api/workflow/instance';
 import { resolveFieldPermissions } from '@/api/budget/fieldVisibility';
 import { useUserStore } from '@/store/modules/user';
 import type { BudgetFillVo } from '@/api/budget/fill/types';
 
 const userStore = useUserStore();
+const route = useRoute();
+
+// 审批/查看深链模式：从待办中心/流程实例跳转进来（携带 taskId），只读查看，禁止编辑/提交
+const isApprovalView = computed(() => !!(route.query.taskId) && (route.query.type === 'view' || route.query.type === 'approval'));
 
 // ===== 数据 =====
-const planId = ref<number>();
+const planId = ref<string | number>();
 const planOptions = ref<any[]>([]);
 const deptId = ref<number>();
 const deptOptions = ref<any[]>([]);
@@ -523,8 +607,45 @@ const myUnitDisplay = ref<string>('');
 const allFillData = ref<BudgetFillVo[]>([]);
 const loading = ref(false);
 const saveLoading = ref(false);
+const approvalLoading = ref(false);
+const approvalMessage = ref('');
 const submitLoading = ref(false);
 const activeSection = ref(0);
+
+// ===== 审批相关 =====
+const taskId = computed(() => route.query.taskId as string);
+const handleApprove = async () => {
+  try {
+    await ElMessageBox.confirm('确认审批通过？', '审批确认', { type: 'success' });
+    approvalLoading.value = true;
+    await completeTask({
+      taskId: taskId.value,
+      message: approvalMessage.value || '审批通过',
+      variables: {}
+    });
+    ElMessage.success('审批通过！');
+    proxy.$tab.closePage(proxy.$route);
+    proxy.$router.push('/workflow/task/taskWaiting');
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.msg || '审批失败');
+  } finally { approvalLoading.value = false; }
+};
+const handleReject = async () => {
+  try {
+    await ElMessageBox.confirm('确认驳回？驳回后数据将回到草稿状态。', '驳回确认', { type: 'warning' });
+    approvalLoading.value = true;
+    await backProcess({
+      taskId: taskId.value,
+      message: approvalMessage.value || '驳回',
+      variables: {}
+    });
+    ElMessage.success('已驳回！');
+    proxy.$tab.closePage(proxy.$route);
+    proxy.$router.push('/workflow/task/taskWaiting');
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.msg || '驳回失败');
+  } finally { approvalLoading.value = false; }
+};
 
 // ===== 审批意见（批注）回复 =====
 const commentsDialog = ref(false);
@@ -897,6 +1018,20 @@ interface Section {
   totalBudget: number;
   totalActual: number;
   status: string;
+  /** 预算项目列表头（模板设计画布 A列，解析不到回退"预算项目"） */
+  subjectLabel?: string;
+  /** 上年实际列表头（模板元数据 actual_label） */
+  actualLabel?: string;
+  /** 本年预算列表头（模板元数据 budget_label / 设计画布 B列） */
+  budgetLabel?: string;
+  /** 是否展示增减额列（模板设计器附加列配置） */
+  showDiff?: boolean;
+  /** 是否展示增减率列（模板设计器附加列配置） */
+  showDiffRate?: boolean;
+  /** 增减额列表头文案 */
+  diffLabel?: string;
+  /** 增减率列表头文案 */
+  diffRateLabel?: string;
 }
 
 const sections = ref<Section[]>([]);
@@ -913,7 +1048,7 @@ const currentDeptName = computed(() => {
     const dept = deptOptions.value.find(d => d.deptId === deptId.value);
     return dept?.deptName || '未选择';
   }
-  return myUnitDisplay.value || userStore.deptName || '未知部门';
+  return myUnitDisplay.value || (userStore as any).deptName || '未知部门';
 });
 
 const planStatus = computed(() => {
@@ -921,8 +1056,8 @@ const planStatus = computed(() => {
   return plan?.status || '';
 });
 
-const readonly = computed(() => planStatus.value === 'ARCHIVED' || planStatus.value === 'CLOSED');
-const planDisabled = computed(() => false);
+const readonly = computed(() => isApprovalView.value || planStatus.value === 'ARCHIVED' || planStatus.value === 'CLOSED');
+const planDisabled = computed(() => isApprovalView.value);
 
 const editableCount = computed(() => {
   if (activeSection.value >= 0 && sections.value[activeSection.value]) {
@@ -930,11 +1065,18 @@ const editableCount = computed(() => {
   }
   return allFillData.value.filter(d => d.isEditable === 1 && !isFieldHidden(d) && d.templateCode !== '14' && d.templateCode !== '15').length;
 });
+// 行是否已填写：TEXT/SELECT 行看本年预算文本(remark)是否非空；数值行看预算金额或上年实际是否有值
+const isRowFilled = (row: BudgetFillVo) => {
+  if (row.inputType === 'TEXT' || row.inputType === 'SELECT') {
+    return !!(row.remark && String(row.remark).trim());
+  }
+  return (Number(row.budgetAmount) || Number(row.lastActual)) !== 0;
+};
 const filledCount = computed(() => {
   if (activeSection.value >= 0 && sections.value[activeSection.value]) {
-    return sections.value[activeSection.value].rows.filter(d => d.isEditable === 1 && !isFieldHidden(d) && (Number(d.budgetAmount) || Number(d.lastActual)) !== 0).length;
+    return sections.value[activeSection.value].rows.filter(d => d.isEditable === 1 && !isFieldHidden(d) && isRowFilled(d)).length;
   }
-  return allFillData.value.filter(d => d.isEditable === 1 && !isFieldHidden(d) && d.templateCode !== '14' && d.templateCode !== '15' && (Number(d.budgetAmount) || Number(d.lastActual)) !== 0).length;
+  return allFillData.value.filter(d => d.isEditable === 1 && !isFieldHidden(d) && d.templateCode !== '14' && d.templateCode !== '15' && isRowFilled(d)).length;
 });
 const totalBudget = computed(() => {
   return sections.value.reduce((sum, s) => sum + (s.totalBudget || 0), 0);
@@ -955,24 +1097,61 @@ const hasDraftData = computed(() => {
   return allFillData.value.some(d => d.status === 'DRAFT' && d.templateCode !== '14' && d.templateCode !== '15');
 });
 
-// 获取驳回原因（从DRAFT状态的数据中读取remark字段）
-const rejectRemark = computed(() => {
-  const rejected = allFillData.value.find(d => d.status === 'DRAFT' && d.templateCode !== '14' && d.templateCode !== '15' && d.remark && d.remark.startsWith('【驳回】'));
-  return rejected?.remark || '';
-});
+// 驳回原因：审批意见应只体现在审批轨迹中，不再写入模板备注
+const rejectReason = ref('');
+const loadRejectReason = async () => {
+  if (!planId.value || !deptId.value) return;
+  try {
+    const res = await flowHisTaskListForFill(`${planId.value}_${deptId.value}_ALL`);
+    const list = (res.data || {}).list || [];
+    const backNode = [...list].reverse().find((t: any) => t.skipType === 'REJECT' || t.flowStatus === 'back' || (t.message && /退回|驳回/.test(String(t.message))));
+    rejectReason.value = backNode ? (backNode.message || '') : '';
+  } catch { /* 审批轨迹接口异常时忽略 */ }
+};
 
-// 获取所有不同板块的驳回原因
+// 被退回板块的驳回原因（源自审批轨迹），仅在确有退回动作时展示
 const rejectRemarks = computed(() => {
   const remarks: { code: string; name: string; remark: string }[] = [];
-  const seen = new Set<string>();
-  for (const d of allFillData.value) {
-    if (d.status === 'DRAFT' && d.templateCode !== '14' && d.templateCode !== '15' && d.remark && d.remark.startsWith('【驳回】') && !seen.has(d.templateCode)) {
-      seen.add(d.templateCode);
-      const name = sectionConfig[d.templateCode] || d.templateName || d.templateCode;
-      remarks.push({ code: d.templateCode, name, remark: d.remark });
+  if (rejectReason.value) {
+    const seen = new Set<string>();
+    for (const d of allFillData.value) {
+      if (d.status === 'DRAFT' && d.templateCode !== '14' && d.templateCode !== '15' && !seen.has(d.templateCode)) {
+        seen.add(d.templateCode);
+        const name = sectionConfig[d.templateCode] || d.templateName || d.templateCode;
+        remarks.push({ code: d.templateCode, name, remark: rejectReason.value });
+      }
     }
   }
   return remarks;
+});
+
+// ===== 两上两下流程 =====
+const roundSteps = [
+  { title: '一上·下级提交' }, { title: '一下·上级反馈' },
+  { title: '二上·下级修订' }, { title: '二下·上级批复' }
+];
+// 当前轮次：取批注/审批记录中的最大提交轮次；无记录视为第 1 轮
+const currentRound = computed(() => {
+  const maxRound = comments.value.reduce((m: number, c: any) => Math.max(m, Number(c.submitRound) || 0), 0);
+  return maxRound >= 1 ? maxRound : (hasSubmitted.value || hasApproved.value ? 1 : 1);
+});
+// 步骤条高亮：0=一上(未提交/草稿) 1=一下(已提交待审批) 2=二上(被退回修订中) 3=二下(修订后已提交) 4=已批复
+const stepActive = computed(() => {
+  if (hasApproved.value && !hasDraftData.value && !hasSubmitted.value) return 4;
+  if (hasSubmitted.value && !hasDraftData.value) return currentRound.value >= 2 ? 3 : 1;
+  if (hasDraftData.value) return currentRound.value >= 2 ? 2 : 0;
+  return 0;
+});
+const fillStatusText = computed(() => {
+  if (hasApproved.value && !hasDraftData.value && !hasSubmitted.value) return '已批复';
+  if (hasSubmitted.value && !hasDraftData.value) return currentRound.value >= 2 ? '已提交 · 待终审' : '已提交 · 待反馈';
+  if (hasDraftData.value) return currentRound.value >= 2 ? '修订中' : '填报中';
+  return '填报中';
+});
+const fillStatusType = computed(() => {
+  if (hasApproved.value && !hasDraftData.value && !hasSubmitted.value) return 'success';
+  if (hasSubmitted.value && !hasDraftData.value) return 'warning';
+  return 'primary';
 });
 
 // ===== 工具方法 =====
@@ -1259,7 +1438,7 @@ const diffDirection = (row: BudgetFillVo) => {
 };
 
 const getStatusType = (status: string) => {
-  const map: Record<string, string> = { DRAFT: 'info', SUBMITTED: 'primary', APPROVED: 'success', REJECTED: 'danger' };
+  const map: Record<string, 'primary' | 'success' | 'info' | 'warning' | 'danger'> = { DRAFT: 'info', SUBMITTED: 'primary', APPROVED: 'success', REJECTED: 'danger' };
   return map[status] || 'info';
 };
 
@@ -1347,12 +1526,20 @@ const buildSections = () => {
 
     result.push({
       code,
-      name: sectionConfig[code] || rows[0]?.templateName || `预算表${code}`,
+      name: sectionConfig[code] || rows[0]?.title || rows[0]?.templateName || `预算表${code}`,
       rows,
       expanded: prevExpanded.get(code) ?? false,
       totalBudget: 0,
       totalActual: 0,
-      status: ''
+      status: '',
+      // 模板列配置（以设计画布为准）：取本板块模板级行 rows[0] 的字段
+      subjectLabel: rows[0]?.subjectLabel || '预算项目',
+      actualLabel: rows[0]?.actualLabel || '上年实际(万元)',
+      budgetLabel: rows[0]?.budgetLabel || '本年预算(万元)',
+      showDiff: !!rows[0]?.showDiff,
+      showDiffRate: !!rows[0]?.showDiffRate,
+      diffLabel: rows[0]?.diffLabel || '增减额',
+      diffRateLabel: rows[0]?.diffRateLabel || '增减率'
     });
   }
 
@@ -1407,6 +1594,11 @@ const onFillInput = (row: BudgetFillVo, section: Section) => {
 // 01公司基本信息输入后：清理非法字符 + 调度自动保存
 const onBasicInput = (row: BudgetFillVo) => {
   sanitizeBasicInput(row);
+  scheduleAutoSave();
+};
+
+// 文本/下拉科目输入后：调度自动保存
+const onTextInput = (row: BudgetFillVo) => {
   scheduleAutoSave();
 };
 
@@ -1486,6 +1678,7 @@ const loadFillData = async (silent = false) => {
     if (planId.value && (deptId.value || !showDeptSelect.value)) {
       loadComments(deptId.value);
     }
+    loadRejectReason();
   } catch (error) {
     console.error('加载填报数据失败', error);
     ElMessage.error('加载填报数据失败');
@@ -1524,7 +1717,9 @@ const handleSaveDraft = async () => {
         templateCode: d.templateCode,
         budgetAmount: d.budgetAmount,
         lastActual: d.lastActual,
-        remark: d.remark && d.remark.startsWith('【驳回】') ? null : d.remark
+        remark: d.remark && d.remark.startsWith('【驳回】') ? null : d.remark,
+        lastActualText: d.lastActualText,
+        inputType: d.inputType
       }));
 
     await saveDraft({
@@ -1606,7 +1801,38 @@ const handleSaveBasicInfo = async () => {
   }
 };
 
-const submitReason = ref('');
+const submitDialog = ref(false);
+const submitReasonTemp = ref('');
+const submitFiles = ref<{ url: string; name: string }[]>([]);
+
+// 附件上传：POST /common/upload，成功后暂存待提交
+const uploadSubmitFile = (options: any) => {
+  const xhr = new XMLHttpRequest();
+  const fd = new FormData();
+  fd.append('file', options.file);
+  const base = import.meta.env.VITE_APP_BASE_API || '/dev-api';
+  const token = localStorage.getItem('Admin-Token');
+  xhr.open('POST', `${base}/common/upload`);
+  if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+  xhr.upload.onprogress = (e: ProgressEvent) => {
+    if (e.total && options.onProgress) options.onProgress({ percent: Math.round((e.loaded / e.total) * 100) });
+  };
+  xhr.onload = () => {
+    try {
+      const r = JSON.parse(xhr.responseText || '{}');
+      const url = r?.data?.url || r?.url || '';
+      if (!url) { ElMessage.error('上传失败'); options.onError(); return; }
+      submitFiles.value.push({ url, name: options.file.name });
+      options.onSuccess({ response: r, url });
+    } catch { options.onError(); }
+  };
+  xhr.onerror = () => { ElMessage.error('上传失败'); options.onError(); };
+  xhr.send(fd);
+};
+// 移除已选附件
+const removeSubmitFile = (url: string) => {
+  submitFiles.value = submitFiles.value.filter(f => f.url !== url);
+};
 
 const handleSubmit = async () => {
   // 提交前校验预检：ERROR 阻断并展示清单；WARN 强制填写原因说明
@@ -1643,7 +1869,7 @@ const handleSubmit = async () => {
                 inputValidator: (val: any) => (val && String(val).trim()) || '请填写说明'
               }
             );
-            submitReason.value = r.value;
+            submitReasonTemp.value = r.value;
           } catch {
             return;
           }
@@ -1655,12 +1881,12 @@ const handleSubmit = async () => {
     }
   }
 
-  try {
-    await ElMessageBox.confirm('提交后数据将进入审批流程，确认提交？', '提示', { type: 'warning' });
-  } catch {
-    return;
-  }
+  // 弹出提交确认对话框（可填写提交说明/备注，选填）
+  submitDialog.value = true;
+};
 
+// 确认提交：携带提交说明（备注）执行提交
+const confirmSubmit = async () => {
   submitLoading.value = true;
   try {
     const items = allFillData.value
@@ -1671,7 +1897,9 @@ const handleSubmit = async () => {
         templateCode: d.templateCode,
         budgetAmount: d.budgetAmount,
         lastActual: d.lastActual,
-        remark: d.remark && d.remark.startsWith('【驳回】') ? null : d.remark
+        remark: d.remark && d.remark.startsWith('【驳回】') ? null : d.remark,
+        lastActualText: d.lastActualText,
+        inputType: d.inputType
       }));
 
     await submitFill({
@@ -1679,10 +1907,13 @@ const handleSubmit = async () => {
       deptId: showDeptSelect.value ? deptId.value : undefined,
       orgId: showDeptSelect.value ? deptId.value : undefined,
       dataVersion: 'BUDGET',
-      submitReason: submitReason.value,
+      submitReason: submitReasonTemp.value.trim(),
+      attachment: submitFiles.value.map(f => f.url).join(','),
       items
     });
-    submitReason.value = '';
+    submitDialog.value = false;
+    submitReasonTemp.value = '';
+    submitFiles.value = [];
     ElMessage.success('提交成功，等待审批');
     loadFillData();
   } catch (error) {
@@ -1700,6 +1931,20 @@ onMounted(async () => {
   if (showDeptSelect.value) {
     await loadDepts();
   }
+  // 深链快速定位：id 形如 planId_deptId_templateCode（审批/查看跳转）
+  const deepId = String(route.query.id || '');
+  if (deepId) {
+    const parts = deepId.split('_');
+    if (parts.length >= 2) {
+      const pId = parts[0];
+      const dId = parts[1] ? Number(parts[1]) : NaN;
+      if (pId) planId.value = pId;
+      if (dId && showDeptSelect.value) deptId.value = dId;
+    }
+  }
+  if (planId.value && (deptId.value || !showDeptSelect.value)) {
+    loadFillData(true);
+  }
 });
 
 // 页面重新激活时自动刷新数据（从审批中心切回来时触发）
@@ -1711,6 +1956,12 @@ onActivated(() => {
 </script>
 
 <style scoped>
+/* 两上两下流程步骤条 */
+.fill-round-card :deep(.el-card__body) { padding: 14px 16px; }
+.fill-round-bar { display: flex; align-items: center; gap: 16px; }
+.fill-steps { flex: 1; min-width: 0; }
+.fill-round-meta { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.fill-round-no { font-size: 14px; font-weight: 600; color: #409eff; }
 .filter-card :deep(.el-card__body) {
   padding: 8px 14px;
 }

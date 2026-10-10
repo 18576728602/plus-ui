@@ -61,7 +61,7 @@ export const delBudgetControlRule = (id: number | Array<number>) => {
  */
 export const listControlCompanies = (): AxiosPromise<any[]> => {
   return request({
-    url: '/budget/templateItem/companies',
+    url: '/budget/plan/companies',
     method: 'get'
   });
 };

@@ -15,7 +15,7 @@ const isStructural = (n: SubjectMasterVO, keepHead = false) => {
   if (rt === 'HEAD') return !keepHead;
   if (rt) return false;
   // 兜底：存量数据尚未同步 row_type 时，以 is_summary=1 汇总口径近似（兼容 number/string 双形态）
-  return Number(n.isSummary) === 1;
+  return (n.rowType === 'HEAD');
 };
 
 /** 将后端 /queryList 返回的扁平主数据列表组装为树（按 parentCode + 类型 + 归属公司）
@@ -100,9 +100,13 @@ function buildCategoryTree(
   const groupByCode = new Map<string, SubjectMasterVO>();
   rootGroups.forEach((g) => groupByCode.set(g.categoryCode!, g));
 
-  nodes.forEach((n) => {
-    const g = n.categoryCode ? groupByCode.get(n.categoryCode) : undefined;
-    if (!g) return;
+  // SubjectMaster 汇总行(rowType='HEAD')是独立分类体系，与 BudgetCategory(01~16 预算业务大类)无关
+  // 它们不按 categoryCode 归组，而是按 parentCode 自嵌套，并作为独立顶层节点与 BudgetCategory 分组并列
+  const summaryNodes = nodes.filter((n) => (n.rowType === 'HEAD'));
+  const detailNodes = nodes.filter((n) => (n.rowType !== 'HEAD'));
+
+  detailNodes.forEach((n) => {
+    // 优先按 parentCode 挂父节点（父级可以是 HEAD 分类行，也可以是其他明细）
     let parent: SubjectMasterVO | undefined;
     if (n.parentCode && n.parentCode !== n.subjectCode) {
       parent = nodes.find(
@@ -111,12 +115,33 @@ function buildCategoryTree(
     }
     if (parent) {
       parent.children!.push(n);
-    } else {
+      return;
+    }
+    // 无父级时按 categoryCode 归入预算分类分组
+    const g = n.categoryCode ? groupByCode.get(n.categoryCode) : undefined;
+    if (g) {
       g.children!.push(n);
     }
+    // 无父级且无 categoryCode → 留给下方 orphan 处理（归入"未分类"）
   });
+
+  // SubjectMaster 汇总行自嵌套树
+  const summaryRoots: SubjectMasterVO[] = [];
+  summaryNodes.forEach((n) => {
+    if (n.parentCode && n.parentCode !== n.subjectCode) {
+      const parent = summaryNodes.find(
+        (p) => keyOf(p) === `${n.parentCode}|${n.subjectType}|${n.orgId ?? ''}`
+      );
+      if (parent) {
+        parent.children!.push(n);
+        return;
+      }
+    }
+    summaryRoots.push(n);
+  });
+
   // 未分类明细单列一组，避免丢失
-  const orphans = nodes.filter((n) => {
+  const orphans = detailNodes.filter((n) => {
     const g = n.categoryCode ? groupByCode.get(n.categoryCode) : undefined;
     if (g) return false;
     // 已作为某节点的子节点，不单独成组
@@ -134,6 +159,9 @@ function buildCategoryTree(
     });
   }
 
+  // SubjectMaster 汇总行作为独立顶层节点，与 BudgetCategory 分组并列
+  const allRoots = [...rootGroups, ...summaryRoots];
+
   // 关键词过滤：分类名/编码命中保留整分类，否则仅保留子级命中的分支
   if (keyword && String(keyword).trim()) {
     const kw = String(keyword).trim().toLowerCase();
@@ -144,9 +172,9 @@ function buildCategoryTree(
       if (match(n) || cs.length > 0) return { ...n, children: cs };
       return null;
     };
-    return rootGroups.map((g) => prune(g)).filter((n): n is SubjectMasterVO => !!n);
+    return allRoots.map((g) => prune(g)).filter((n): n is SubjectMasterVO => !!n);
   }
-  return rootGroups;
+  return allRoots;
 }
 
 /** 按创建时间先后排序(时间早的在前)，用于科目明细页分类与明细的有序展示 */
@@ -216,4 +244,25 @@ export const changeSubjectMasterValid = (id: string | number, validFlag: string)
 /** 停用前引用提示：查询科目被方案/预算表挂接引用的次数 */
 export const getSubjectMasterRefCount = (id: string | number): AxiosPromise<number> => {
   return request({ url: `/budget/subject/refCount/${id}`, method: 'get' });
+};
+/** 导入预算科目主数据 */
+export const importSubjectMaster = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request({
+    url: '/budget/subject/import',
+    method: 'post',
+    data: formData,
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+};
+
+/** 导出预算科目主数据（含下拉验证，导出文件可直接作为导入模板） */
+export const exportSubjectMaster = (query?: SubjectMasterQuery) => {
+  return request({
+    url: '/budget/subject/export',
+    method: 'post',
+    params: query,
+    responseType: 'blob'
+  });
 };

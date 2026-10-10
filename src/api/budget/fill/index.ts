@@ -15,7 +15,7 @@ export const getMyUnit = (): AxiosPromise<any> => {
 /**
  * 获取单个预算表填报数据
  */
-export const getFillData = (params: { planId: number; templateCode: string; deptId?: number }): AxiosPromise<BudgetFillVo[]> => {
+export const getFillData = (params: { planId: string | number; templateCode?: string; deptId?: number }): AxiosPromise<BudgetFillVo[]> => {
   return request({
     url: '/budget/fill/getFillData',
     method: 'get',
@@ -26,7 +26,7 @@ export const getFillData = (params: { planId: number; templateCode: string; dept
 /**
  * 获取所有板块填报数据
  */
-export const getAllFillData = (params: { planId: number; deptId?: number }): AxiosPromise<BudgetFillVo[]> => {
+export const getAllFillData = (params: { planId: string | number; deptId?: number }): AxiosPromise<BudgetFillVo[]> => {
   return request({
     url: '/budget/fill/getAllFillData',
     method: 'get',

@@ -4,6 +4,9 @@ import 'virtual:uno.css';
 import 'element-plus/theme-chalk/dark/css-vars.css';
 import '@/assets/styles/index.scss';
 
+// Univer 样式（必须在业务组件使用前全局引入，否则工具栏/公式栏/Ribbon 无定位样式会散乱）
+import '@univerjs/preset-sheets-core/lib/index.css';
+
 // App、router、store
 import App from './App.vue';
 import store from './store';
